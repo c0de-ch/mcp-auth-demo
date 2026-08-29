@@ -1,0 +1,121 @@
+# Release: runs on a version tag (v0.1.0, v0.1.1, …).
+#
+#   1. typecheck + tests
+#   2. source archive + SHA256SUMS, signed with Sigstore cosign (keyless, GitHub OIDC)
+#   3. container image pushed to ghcr.io, signed with cosign, with SLSA build provenance
+#   4. GitHub release with the archive, checksums and the Sigstore bundles attached
+#
+# Verification instructions: docs/release-signing.md
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write      # create the release and upload assets
+  packages: write      # push the image to ghcr.io
+  id-token: write      # Sigstore keyless signing (OIDC token for Fulcio)
+  attestations: write  # SLSA provenance attestations
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test   # Keycloak-backed suites skip themselves here; CI on main runs them
+
+      - uses: sigstore/cosign-installer@v3
+
+      - name: Source archive and checksums
+        id: archive
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          ARCHIVE="mcp-auth-demo-${TAG}.tar.gz"
+          git archive --format=tar.gz --prefix="mcp-auth-demo-${TAG}/" -o "${ARCHIVE}" "${TAG}"
+          sha256sum "${ARCHIVE}" > SHA256SUMS
+          echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
+          cat SHA256SUMS
+
+      - name: Sign archive and checksums (cosign keyless)
+        env:
+          ARCHIVE: ${{ steps.archive.outputs.archive }}
+        run: |
+          set -euo pipefail
+          cosign sign-blob --yes --bundle "${ARCHIVE}.sigstore.json" "${ARCHIVE}"
+          cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
+          # verify what we just produced, with the identity a user would check
+          cosign verify-blob --bundle "${ARCHIVE}.sigstore.json" \
+            --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com "${ARCHIVE}"
+
+      - name: Attest provenance of the archive
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ steps.archive.outputs.archive }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - uses: docker/build-push-action@v6
+        id: build
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false   # provenance is attached below with a verifiable identity
+
+      - name: Sign the image (cosign keyless)
+        run: |
+          set -euo pipefail
+          cosign sign --yes "${IMAGE}@${{ steps.build.outputs.digest }}"
+          cosign verify "${IMAGE}@${{ steps.build.outputs.digest }}" \
+            --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com >/dev/null
+
+      - name: Attest provenance of the image
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            ${{ steps.archive.outputs.archive }}
+            ${{ steps.archive.outputs.archive }}.sigstore.json
+            SHA256SUMS
+            SHA256SUMS.sigstore.json

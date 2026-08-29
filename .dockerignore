@@ -1,0 +1,12 @@
+.git
+node_modules
+.env
+.env.*
+!.env.example
+.mcp-auth
+test-results
+coverage
+keycloak/.generated
+examples/**/certs
+**/.venv
+**/__pycache__

@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # single-machine CI: everything talks to the loopback address
+      PUBLIC_HOST: 127.0.0.1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - name: Start Keycloak (same compose + realm as local dev)
+        run: |
+          cp .env.example .env
+          sed -i 's/^PUBLIC_HOST=.*/PUBLIC_HOST=127.0.0.1/' .env
+          npm run kc:up
+
+      - run: npm test
+
+      - name: Keycloak logs (on failure)
+        if: failure()
+        run: docker logs mcp-auth-demo-keycloak 2>&1 | tail -n 150
+
+      - name: Stop Keycloak
+        if: always()
+        run: npm run kc:down
