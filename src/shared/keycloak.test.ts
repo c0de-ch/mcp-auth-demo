@@ -82,8 +82,9 @@ describe.skipIf(!keycloakUp)('shared foundation against Keycloak', () => {
     }
   });
 
-  it('keeps mcp:admin only for bob (role mcp-admin), even if alice was granted the scope', async () => {
+  it('grants mcp:admin to bob (role mcp-admin) and not to alice, who may ask for it', async () => {
     const bob = await keycloakPasswordToken({ username: 'bob', password: 'password', scope: 'mcp:tools mcp:admin' });
+    expect(decodeJwtPayload(bob.access_token).scope).toContain('mcp:admin');
     const bobClient = await connectClient(mcpUrl, { headers: bearer(bob.access_token) });
     try {
       expect((await runDemo(bobClient.client, { print: () => undefined })).adminOnly.isError).toBe(false);
@@ -91,12 +92,15 @@ describe.skipIf(!keycloakUp)('shared foundation against Keycloak', () => {
       await bobClient.close();
     }
 
+    // Alice asks for the same scope. The realm's role scope mapping (mcp:admin -> mcp-admin) makes
+    // Keycloak refuse to issue it, so the scope never reaches the token — the authorization server
+    // enforces the scope/role agreement itself. See docs/keycloak.md.
     const alice = await keycloakPasswordToken({ username: 'alice', password: 'password', scope: 'mcp:tools mcp:admin' });
-    expect(decodeJwtPayload(alice.access_token).scope).toContain('mcp:admin'); // the CLIENT was granted it…
+    expect(decodeJwtPayload(alice.access_token).scope).not.toContain('mcp:admin');
     const aliceClient = await connectClient(mcpUrl, { headers: bearer(alice.access_token) });
     try {
       const result = await runDemo(aliceClient.client, { print: () => undefined });
-      expect((result.whoami.json as { scopes: string[] }).scopes).not.toContain('mcp:admin'); // …but the USER lacks the role
+      expect((result.whoami.json as { scopes: string[] }).scopes).not.toContain('mcp:admin');
       expect(result.adminOnly.isError).toBe(true);
     } finally {
       await aliceClient.close();
