@@ -37,7 +37,10 @@ interface Step {
   args?: string[];
   /** Expected exit code (default 0). */
   exit?: number;
-  /** Assertions on the RESULT line; skipped when `exit` is non-zero. */
+  /**
+   * Assertions on the RESULT line; skipped when `exit` is non-zero. A step without `expect` is
+   * checked on its exit code alone and needs no RESULT line (`--logout`, helper scripts).
+   */
   expect?: (r: ResultLine) => void;
 }
 
@@ -273,9 +276,14 @@ async function runClient(example: Example, step: Step, storeDir: string) {
   if (code !== wantExit) throw new Error(`exit ${code}, expected ${wantExit}: ${child.stderr().trim().split('\n').at(-1) ?? ''}`);
   if (wantExit !== 0) return `exit ${code} as expected`;
   const result = parseResultLine(child.stdout());
-  if (!result) throw new Error(`no RESULT line on stdout:\n${child.stdout().slice(-500)}`);
-  step.expect?.(result);
-  return `adminOnly=${result.adminOnly}`;
+  // Only steps that assert on the RESULT line require one. Steps such as `--logout`, or a helper
+  // script like 07's revoke.ts, do real work without ever connecting to an MCP server, so demanding
+  // a RESULT line from them would force the step to fabricate one and corrupt the output contract.
+  if (step.expect) {
+    if (!result) throw new Error(`no RESULT line on stdout:\n${child.stdout().slice(-500)}`);
+    step.expect(result);
+  }
+  return result ? `adminOnly=${result.adminOnly}` : `exit ${code}`;
 }
 
 for (const example of EXAMPLES) {
