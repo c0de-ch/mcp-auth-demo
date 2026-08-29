@@ -262,12 +262,12 @@ Keycloak-dependent tests: `const up = await isKeycloakUp(); describe.skipIf(!up)
 * **One callback port per machine.** Two example clients that both need a browser login at the same
   time collide on `OAUTH_CALLBACK_PORT`; run them one after another (cached-token runs do not bind
   the port at all). `scripts/smoke.ts` runs examples sequentially for this reason.
-* **Dynamically registered Keycloak clients** (default in 03/04/06) only receive the realm's default
-  DCR scopes (`basic` + `mcp:tools`): their tokens carry no `preferred_username` / `realm_access`,
-  so `whoami.extra.username` is undefined and `keycloakEffectiveScopes()` can never grant
-  `mcp:admin` to them. Use the pre-registered `mcp-cli` client (`OAUTH_CLIENT_ID=mcp-cli`) when you
-  need admin. Anonymous DCR also leaves a client behind in the realm per machine; `npm run kc:reset`
-  cleans up.
+* **Dynamically registered Keycloak clients** (default in 03/04/06) receive only the realm's default
+  DCR scopes (`basic` plus what they request). The realm therefore maps `preferred_username` and
+  `realm_access.roles` onto the `mcp:tools` scope and adds role scope mappings, so DCR tokens do
+  carry a username and roles — verified: a DCR run as bob reaches `admin_only`. Without those
+  mappings a DCR client's token would have neither. Anonymous DCR leaves a client behind in the
+  realm per machine and per token store; `npm run kc:reset` cleans up. See `docs/keycloak.md`.
 * `listen()` is plain HTTP; example 08 (mTLS) builds its own `https.Server` and passes it in.
 * The request log includes the query string (`/authorize?state=…` in 03/06) — fine for a demo,
   trim it in production.

@@ -145,6 +145,9 @@ const EXAMPLES: Example[] = [
       { name: 'DCR + browser login (alice)', env: browser('alice'), expect: user('alice', 'denied') },
       { name: 'second run (refresh, no browser)', env: { MCP_NO_BROWSER: '1' }, expect: user('alice', 'denied') },
       { name: 'pre-registered mcp-cli', env: { ...browser('alice'), OAUTH_CLIENT_ID: 'mcp-cli' }, expect: (r) => { user('alice', 'denied')(r); assertEq('whoami.clientId', whoamiField(r, 'clientId'), 'mcp-cli'); } },
+      // Without the logout, bob's run would replay alice's still-valid tokens from the mcp-cli
+      // store, never open a browser, and fail EXPECT_ADMIN=ok as the wrong user.
+      { name: 'logout (mcp-cli store)', env: { OAUTH_CLIENT_ID: 'mcp-cli' }, args: ['--logout'] },
       { name: 'bob (admin)', env: { ...browser('bob'), OAUTH_CLIENT_ID: 'mcp-cli', EXPECT_ADMIN: 'ok' }, expect: user('bob', 'ok') },
     ],
     negative: (url) => expect401(url, { resourceMetadata: true }),

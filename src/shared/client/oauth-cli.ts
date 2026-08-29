@@ -77,7 +77,12 @@ export class CliOAuthProvider implements OAuthClientProvider {
     this.redirectHost = options.redirectHost ?? process.env.OAUTH_REDIRECT_HOST?.trim() ?? '127.0.0.1';
     this.callbackPort = options.callbackPort ?? envPort('OAUTH_CALLBACK_PORT', 4199);
     const storeDir = options.storeDir ?? process.env.MCP_AUTH_STORE_DIR?.trim() ?? join(REPO_ROOT, '.mcp-auth');
-    const key = createHash('sha256').update(this.serverUrl + this.clientName).digest('hex').slice(0, 16);
+    // The client id is part of the key: switching between Dynamic Client Registration and a
+    // pre-registered client (OAUTH_CLIENT_ID=mcp-cli) must not replay the other one's tokens, which
+    // would silently connect as the wrong client — and, if the stored tokens are still valid, as the
+    // wrong USER, since a run that expects a fresh login would never open the browser.
+    const identity = `${this.serverUrl}\u0000${this.clientName}\u0000${this.staticClient?.client_id ?? 'dcr'}`;
+    const key = createHash('sha256').update(identity).digest('hex').slice(0, 16);
     this.storeFile = join(storeDir, `${key}.json`);
     this.data = this.load();
   }
