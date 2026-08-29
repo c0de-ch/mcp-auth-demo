@@ -15,7 +15,13 @@
 # Requires openssl ≥ 3.5 for -not_before/-not_after (used for the expired certificate).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Load .env WITHOUT overriding variables the caller exported (same precedence as dotenv
+# on the TypeScript side): shell environment wins over .env.
+_caller_public_host="${PUBLIC_HOST:-}"; _caller_out_dir="${OUT_DIR:-}"; _caller_days="${DAYS:-}"
 [ -f "$ROOT/.env" ] && set -a && . "$ROOT/.env" && set +a
+[ -n "$_caller_public_host" ] && PUBLIC_HOST="$_caller_public_host"
+[ -n "$_caller_out_dir" ] && OUT_DIR="$_caller_out_dir"
+[ -n "$_caller_days" ] && DAYS="$_caller_days"
 OUT_DIR="${OUT_DIR:-$ROOT/examples/08-mtls/certs}"
 if [ -z "${PUBLIC_HOST:-}" ]; then
   PUBLIC_HOST="$(node -e 'const o=require("os").networkInterfaces();for(const k of Object.keys(o))for(const a of o[k])if(a.family==="IPv4"&&!a.internal){console.log(a.address);process.exit(0)}console.log("127.0.0.1")')"

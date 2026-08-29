@@ -3,7 +3,11 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+# Load .env WITHOUT overriding variables the caller exported (shell environment wins,
+# same precedence as dotenv on the TypeScript side).
+_caller_env="$(export -p)"
 [ -f .env ] && set -a && . ./.env && set +a
+eval "$_caller_env"
 if [ -z "${PUBLIC_HOST:-}" ]; then
   PUBLIC_HOST="$(node -e 'const o=require("os").networkInterfaces();for(const k of Object.keys(o))for(const a of o[k])if(a.family==="IPv4"&&!a.internal){console.log(a.address);process.exit(0)}console.log("127.0.0.1")')"
   echo "PUBLIC_HOST not set — using detected LAN address ${PUBLIC_HOST}" >&2
