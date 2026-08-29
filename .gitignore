@@ -20,3 +20,5 @@ __pycache__/
 test-results/
 playwright-report/
 screenshots/
+# rendered from keycloak/realm-mcp.template.json by scripts/kc.sh
+keycloak/.generated/

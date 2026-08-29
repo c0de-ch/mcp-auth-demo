@@ -1,9 +1,11 @@
 # Implementation plan — mcp-auth-demo
 
-> **Status: draft v0.1 (2026-08-28).** An automated design pass (exact API map of the installed
-> `@modelcontextprotocol/sdk` 1.30.0 + three independent architecture proposals + a synthesis) is
-> refining this plan; changes land in this document as they are decided. Everything below is the
-> working plan the implementation is being built against.
+> **Status: decided (2026-08-29).** The design pass is complete: an exact API map of the installed
+> `@modelcontextprotocol/sdk` 1.30.0, three independent architecture proposals (spec purist, DX
+> pragmatist, security engineer) and a judged synthesis. **[`docs/design.md`](design.md) is the
+> single source of truth** for the implementation — per-example specifications, shared-module API,
+> Keycloak realm, negative-test matrices, smoke expectations, docs plan. This page keeps the short
+> version: goal, stack, catalog, phases.
 
 ## 1. Goal
 
@@ -38,23 +40,29 @@ Numbered from simplest to most complete. Each example is **architecturally disti
 variation of a neighbour — and consists of `examples/<nn>-<slug>/{server.ts, client.ts, README.md}`
 plus `docs/<nn>-<slug>.md`.
 
-| # | Directory | Approach | Category | Authorization server | Keycloak? | Port |
-|---|---|---|---|---|---|---|
-| 00 | `examples/00-baseline-no-auth` | Unauthenticated Streamable HTTP server + client — the reference every other example modifies | baseline | – | no | 4100 |
-| 01 | `examples/01-api-key` | Static API key / bearer secret, per-key identity + scopes, constant-time compare | shared secret | – | no | 4101 |
-| 02 | `examples/02-jwt-local` | Locally issued JWT (RS256) verified against a local JWKS; claims → scopes → tool authorization. The stepping stone to an IdP | self-issued token | tiny `issue-token` script | no | 4102 |
-| 03 | `examples/03-oauth-embedded-as` | The MCP server **is** an OAuth 2.1 authorization server: SDK `mcpAuthRouter`, in-memory provider, login page, Dynamic Client Registration, PKCE, refresh | OAuth 2.1 (embedded AS) | the MCP server | no | 4103 |
-| 04 | `examples/04-oauth-keycloak-resource-server` | **Spec-recommended pattern.** Keycloak is the AS; the MCP server is a pure Resource Server: publishes Protected Resource Metadata (RFC 9728), returns `WWW-Authenticate … resource_metadata=`, validates JWTs via JWKS (issuer, audience, expiry), maps scopes → tools. Client discovers everything from the 401 | OAuth 2.1 (external AS) | Keycloak | yes | 4104 |
-| 05 | `examples/05-keycloak-client-credentials` | Machine-to-machine: confidential client with a service account, `client_credentials` grant, no browser; role-based tool gating | OAuth 2.1 (M2M) | Keycloak | yes | 4105 |
-| 06 | `examples/06-oauth-proxy-keycloak` | MCP server as an OAuth **facade** in front of Keycloak (SDK `ProxyOAuthServerProvider`): clients only ever talk to the MCP server; useful when the IdP must stay hidden or clients cannot do DCR against it | OAuth 2.1 (proxied AS) | Keycloak, via the MCP server | yes | 4106 |
-| 07 | `examples/07-token-introspection` | Opaque / reference tokens validated with RFC 7662 introspection against Keycloak (server-side call per request, with caching); shows the JWT-vs-opaque trade-off | OAuth 2.1 (opaque tokens) | Keycloak | yes | 4107 |
-| 08 | `examples/08-mtls` | Mutual TLS: the client presents a certificate, the server maps the certificate subject to an identity; generated dev CA + certs via script | transport-level | – | no | 4108 |
-| 09 | `examples/09-auth-gateway` | Auth gateway / sidecar in front of an **unauthenticated** MCP server: the gateway validates Keycloak tokens and forwards trusted identity headers; the MCP server only accepts traffic from the gateway (trust boundary explained) | infrastructure | Keycloak | yes | 4109 (gateway) / 4119 (internal) |
-| 10 | `examples/10-token-exchange-downstream` | On-behalf-of: the MCP server exchanges the caller's token (RFC 8693, Keycloak standard token exchange) for a token scoped to a downstream API and calls it as the user (no confused deputy) | OAuth 2.1 (delegation) | Keycloak | yes | 4110 (MCP) / 4190 (downstream API) |
-| 11 | `examples/11-python-fastmcp-keycloak` | Python twin of #04 to show the pattern is SDK-agnostic | language twin | Keycloak | yes | 4111 |
+| # | Directory | Approach | Category / spec grade | Keycloak? | Port |
+|---|---|---|---|---|---|
+| 00 | `examples/00-baseline-no-auth` | Unauthenticated Streamable HTTP pair — the reference every other example modifies | baseline (auth is optional in MCP) | no | 4100 |
+| 01 | `examples/01-api-key` | Static API key as Bearer secret; hashed key table, per-key scopes, constant-time compare | shared secret (outside-spec; RFC 6750 syntax only) | no | 4101 |
+| 02 | `examples/02-jwt-local` | Self-issued RS256 JWT verified via a JWKS URL served by a tiny local issuer; strict URL audience | self-issued token (outside-spec: no AS/discovery) | no | 4102 (+ issuer 4192) |
+| 03 | `examples/03-oauth-embedded-as` | The MCP server **is** the OAuth 2.1 AS: `mcpAuthRouter`, login + consent pages, DCR, PKCE, refresh rotation, revocation | OAuth 2.1, AS co-located (conformant) | no | 4103 |
+| 04 | `examples/04-keycloak-resource-server` | **Spec-recommended pattern**: Keycloak is the AS, the MCP server a pure Resource Server (PRM + JWKS, audience + scope checks) | OAuth 2.1, external AS (conformant; Keycloak ignores `resource`) | yes | 4104 |
+| 05 | `examples/05-keycloak-client-credentials` | Machine-to-machine: service account, `client_credentials` (`client_secret_basic`; `private_key_jwt` as stretch) | OAuth 2.1 M2M (conformant) | yes | 4105 |
+| 06 | `examples/06-oauth-proxy-keycloak` | MCP server as OAuth facade in front of Keycloak (`ProxyOAuthServerProvider`, DCR passthrough) | OAuth 2.1 proxied AS (transitional) | yes | 4106 |
+| 07 | `examples/07-token-introspection` | RFC 7662 introspection with TTL cache — revocation visible immediately (contrast with 04) | OAuth 2.1 stateful validation (conformant) | yes | 4107 |
+| 08 | `examples/08-mtls` | Mutual TLS: the client certificate is the credential; demo PKI script | transport-level (outside-spec) | no | 4108 (https) |
+| 09 | `examples/09-auth-gateway` | Gateway validates tokens + serves PRM, reverse-proxies with a signed identity assertion to an internal server | infrastructure trust boundary | yes | 4109 (+ internal 4119) |
+| 10 | `examples/10-token-exchange-downstream` | On-behalf-of: RFC 8693 standard token exchange (Keycloak) to call a downstream API as the user | OAuth 2.1 delegation (conformant) | yes | 4110 (+ downstream 4190) |
+| 11 | `examples/11-python-mcp-keycloak` | Python twin of 04 with the official `mcp` 2.1.1 SDK; the TypeScript client is unchanged | language twin / interop (conformant) | yes | 4111 |
 
-**Decided in the design pass (may still change):** whether #07, #10 and #11 are implemented or
-documented only, depending on what SDK 1.30.0 / Keycloak 26.7 support out of the box.
+**Decided:** 07 (introspection), 10 (token exchange) and 11 (Python twin) are implemented — all three
+were verified against the running Keycloak / installed SDKs before the decision. stdio, CIMD,
+runtime step-up (403 `insufficient_scope`) and the rest of the list below stay docs-only.
+Verified facts that shaped the design: Keycloak does not substitute `${env.X}` in realm imports
+(hence the render step in `scripts/kc.sh`); defining `clientScopes` in an import suppresses the
+built-in scopes (so the template carries them); anonymous DCR rejects `openid` as a scope; Keycloak
+ignores RFC 8707 `resource`; standard token exchange needs `scope=downstream-api` in the request;
+the SDK reads `MCP_DANGEROUSLY_ALLOW_INSECURE_ISSUER_URL` once at module load (import-order rule).
 
 ### Documented but not implemented (`docs/patterns.md`)
 
@@ -148,18 +156,28 @@ that import from `src/shared`.
 
 ## 9. Delivery phases
 
-1. **Scaffold + shared + Keycloak** (this PR): package, tooling, `src/shared`, compose + realm, baseline example.
-2. **Examples in parallel**: one agent per example, each owning only its example directory and its
-   docs page; shared code is frozen during this phase.
-3. **Adversarial verification**: README-only reproduction + security review per example; fixes.
-4. **Docs + README**: comparison matrix, guides, completeness check.
-5. **Release** `v0.1.0` after the PR is merged (releases are immutable; patch bumps thereafter).
+0. **Shared foundation** (PR #1 merged the plan/scaffold; branch `feat/keycloak-shared`): Keycloak
+   stack, `src/shared/*`, baseline example 00, CI workflow; then the Phase-0 additions from
+   `design.md` §10 (PRM helper, Keycloak helper, browser driver, smoke framework, PKI script, realm
+   deltas). Shared code is **frozen** afterwards.
+1. **Examples in parallel** — wave A: 01, 02, 03, 04, 05, 08; wave B: 06, 07, 09, 10, 11. One agent
+   per example, each owning only `examples/NN-*/**` and `docs/NN-*.md`.
+2. **Integration**: smoke matrix, `npm run test:kc`, cross-cutting docs (`comparison`, `spec-background`,
+   `threat-model`, `keycloak`, `lan-testing`, `patterns`, `glossary`), README, CI completion.
+3. **Adversarial verification**: README-only reproduction on a clean clone and from a second LAN
+   machine, security review against the threat model; fixes.
+4. **Release** `v0.1.0` after the PR is merged, with Sigstore **cosign** keyless signing of the
+   release artifacts and `cosign verify` instructions (releases are immutable; patch bumps thereafter).
 
-## 10. Open questions (being answered by the design pass)
+## 10. Open questions — answered
 
-* Does the SDK 1.30.0 client `OAuthClientProvider` support `client_credentials` natively, or does
-  example 05 call the token endpoint directly?
-* Keycloak redirect-URI wildcard rules vs. the LAN callback host — pre-register a list or rely on DCR?
-* Python twin: `mcp` 2.x low-level API vs. `fastmcp` 3.x — which reads better for the docs?
-* Token exchange in Keycloak 26.7: standard (RFC 8693) vs. legacy preview flag — confirm the exact
-  realm settings required.
+* `client_credentials`: the SDK ships `ClientCredentialsProvider` / `PrivateKeyJwtProvider`
+  (`client/auth-extensions.js`); the embedded AS (03) cannot serve the grant, Keycloak can.
+* Keycloak matches redirect URIs exactly (no loopback-port relaxation): the callback port 4199 is
+  fixed and registered for `localhost`, `127.0.0.1` and `PUBLIC_HOST`; DCR registers its own URI.
+* Python twin uses the official `mcp` 2.1.1 (`MCPServer` + `TokenVerifier` + `AuthSettings`);
+  `fastmcp` 3.x still pins `mcp<2` and is mentioned as a variation.
+* Token exchange: Keycloak 26 **standard** token exchange (client attribute
+  `standard.token.exchange.enabled`), no preview feature flag — verified with curl.
+
+Remaining risks and integrator questions are tracked in `design.md` §11.

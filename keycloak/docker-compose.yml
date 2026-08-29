@@ -1,0 +1,29 @@
+# Keycloak 26 for the mcp-auth-demo examples.
+# Start with:  npm run kc:up   (wrapper around: docker compose --env-file .env -f keycloak/docker-compose.yml up -d)
+# Admin console: http://${PUBLIC_HOST}:${KEYCLOAK_PORT}/admin  (admin / admin — demo only)
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.2
+    container_name: mcp-auth-demo-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_ADMIN_USER:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:-admin}
+      # Pin the issuer to ONE public URL so `iss` in tokens is identical no matter
+      # whether Keycloak is reached via localhost, LAN IP or host name.
+      KC_HOSTNAME: http://${PUBLIC_HOST:?PUBLIC_HOST must be set (your LAN IP or host name)}:${KEYCLOAK_PORT:-8180}
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      # (realm file is rendered from realm-mcp.template.json by scripts/kc.sh)
+    ports:
+      - "${KEYCLOAK_PORT:-8180}:8080"
+    volumes:
+      - ./.generated/realm-mcp.json:/opt/keycloak/data/import/realm-mcp.json:ro
+    healthcheck:
+      # the image ships no curl; use bash's /dev/tcp against the management port
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
