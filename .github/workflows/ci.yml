@@ -1,3 +1,11 @@
+# CI — three jobs:
+#
+#   test    typecheck + the whole vitest suite with a real Keycloak (REQUIRE_KEYCLOAK=1)
+#   python  the hermetic pytest suite of example 11 (no Docker, no network)
+#   smoke   the end-to-end matrix (scripts/smoke.ts): real ports, real browser logins  [needs: test]
+#
+# Everything runs on ONE machine, so PUBLIC_HOST is the loopback address: the Keycloak issuer, the
+# resource URLs, the OAuth callback and the example-08 server certificate all resolve to 127.0.0.1.
 name: CI
 
 on:
@@ -5,37 +13,195 @@ on:
     branches: [main]
   pull_request:
 
+# A superseded run on the same branch/PR tells us nothing — cancel it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # single-machine CI: everything talks to the loopback address
+  PUBLIC_HOST: 127.0.0.1
+  NODE_VERSION: "22"
+  # example 11 is developed and verified on 3.14; pyproject.toml only requires >= 3.12
+  PYTHON_VERSION: "3.14"
+  UV_PYTHON: "3.14"
+
 jobs:
+  # ---------------------------------------------------------------- fast feedback
   test:
+    name: typecheck + tests (Keycloak)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      # single-machine CI: everything talks to the loopback address
-      PUBLIC_HOST: 127.0.0.1
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
+
+      # examples/11's vitest suite spawns the real `uv run … server.py` process and SKIPS ITSELF
+      # when uv is missing (REQUIRE_KEYCLOAK does not cover that skip) — so uv is not optional here.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: examples/11-python-mcp-keycloak/uv.lock
 
       - run: npm ci
 
+      # Pre-install the Python deps: the first `uv run` would otherwise resolve and download inside
+      # a test whose /healthz wait is 30 s.  --locked fails loudly if uv.lock and pyproject drifted.
+      - name: Sync the Python project of example 11
+        run: uv sync --locked --project examples/11-python-mcp-keycloak
+
       - run: npm run typecheck
 
-      - name: Start Keycloak (same compose + realm as local dev)
+      - name: Demo .env (PUBLIC_HOST=127.0.0.1)
         run: |
           cp .env.example .env
           sed -i 's/^PUBLIC_HOST=.*/PUBLIC_HOST=127.0.0.1/' .env
-          npm run kc:up
+
+      - name: Start Keycloak (same compose + realm as local dev)
+        run: npm run kc:up
 
       # REQUIRE_KEYCLOAK=1: a Keycloak-backed suite that would be skipped fails instead
       - run: npm run test:kc
 
       - name: Keycloak logs (on failure)
         if: failure()
-        run: docker logs mcp-auth-demo-keycloak 2>&1 | tail -n 150
+        run: |
+          docker compose -p mcp-auth-demo -f keycloak/docker-compose.yml ps || true
+          docker logs mcp-auth-demo-keycloak 2>&1 | tail -n 200 || true
+
+      - name: Stop Keycloak
+        if: always()
+        run: npm run kc:down
+
+  # ---------------------------------------------------------------- example 11 (Python)
+  python:
+    name: pytest (example 11)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: examples/11-python-mcp-keycloak/uv.lock
+
+      - name: Sync the Python project of example 11
+        run: uv sync --locked --project examples/11-python-mcp-keycloak
+
+      # Must run WITH THE EXAMPLE AS THE WORKING DIRECTORY: pytest picks up its rootdir (and with it
+      # `testpaths` and `pythonpath = ["."]`, which is what makes `from server import …` resolve)
+      # from the nearest pyproject.toml. Invoked from the repo root — where there is no pyproject —
+      # collection fails with ModuleNotFoundError: No module named 'server'.
+      - name: Hermetic verifier tests (no Keycloak, no network)
+        working-directory: examples/11-python-mcp-keycloak
+        run: uv run --locked pytest -q
+
+  # ---------------------------------------------------------------- end-to-end matrix
+  smoke:
+    name: smoke (all examples, real ports + browser)
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: examples/11-python-mcp-keycloak/uv.lock
+
+      - run: npm ci
+
+      - name: Sync the Python project of example 11
+        run: uv sync --locked --project examples/11-python-mcp-keycloak
+
+      # smoke hands the login pages to `python3 scripts/browser-login.py` (hard-coded in smoke.ts),
+      # so Playwright must be importable BY THE python3 ON PATH — an ephemeral `uv run --with
+      # playwright` environment would install the browser but not the module the driver imports.
+      # --with-deps pulls the Chromium system libraries via apt (passwordless sudo on the runner).
+      - name: Python Playwright + headless Chromium
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+          python3 -c "from playwright.sync_api import sync_playwright; print('playwright import ok')"
+
+      - name: Demo .env (PUBLIC_HOST=127.0.0.1)
+        run: |
+          cp .env.example .env
+          sed -i 's/^PUBLIC_HOST=.*/PUBLIC_HOST=127.0.0.1/' .env
+
+      # gen-certs.sh works on openssl 3.0+ (runners ship 3.0.13): the expired client certificate is
+      # issued with `openssl ca -startdate/-enddate`, and the script prints openssl's stderr on
+      # failure rather than swallowing it. Verified in an ubuntu:24.04 container.
+      - name: Demo PKI for example 08
+        run: |
+          set -euo pipefail
+          openssl version
+          npm run ex:08:certs
+
+      - name: Start Keycloak (same compose + realm as local dev)
+        run: npm run kc:up
+
+      # The full matrix — every example, no filters. Browser logins, DCR, token exchange, mTLS.
+      # Step timeout < job timeout so the artefact upload and kc:down still run if smoke hangs.
+      - name: Smoke
+        timeout-minutes: 35
+        run: npm run smoke
+
+      # smoke exits 0 when an example is "skip" (Keycloak unreachable) or "missing" (no directory):
+      # green CI that tested almost nothing. Turn both into a failure.
+      - name: No skipped or missing examples
+        run: |
+          set -euo pipefail
+          report="$(ls -1t test-results/smoke-*.json | head -n 1)"
+          if ! jq -e '[.rows[] | select(.status == "skip" or .status == "missing")] | length == 0' "$report" >/dev/null; then
+            echo "::error::smoke did not run every example — see the rows below"
+            jq -r '.rows[] | select(.status == "skip" or .status == "missing") | "\(.example)\t\(.status)\t\(.detail)"' "$report"
+            exit 1
+          fi
+
+      # smoke-<timestamp>.json plus the page HTML + screenshots browser-login.py writes when a
+      # login fails. Uploaded on success too, so a green run is comparable with a red one.
+      - name: Upload smoke results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-results
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Keycloak logs (on failure)
+        if: failure()
+        run: |
+          docker compose -p mcp-auth-demo -f keycloak/docker-compose.yml ps || true
+          docker logs mcp-auth-demo-keycloak 2>&1 | tail -n 200 || true
 
       - name: Stop Keycloak
         if: always()

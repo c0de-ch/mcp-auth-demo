@@ -12,7 +12,8 @@
 #   expired-alice.crt / .key        client cert whose validity ended yesterday (negative path)
 #   rogue-ca.crt / rogue-ca.key     a second CA the server does NOT trust
 #   rogue-client.crt / .key         client cert signed by the rogue CA (negative path)
-# Requires openssl ≥ 3.5 for -not_before/-not_after (used for the expired certificate).
+# Works with openssl 3.0+ (the expired certificate is issued with `openssl ca -startdate/-enddate`;
+# `x509 -not_before/-not_after` would need 3.5+, which CI runners do not have).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Load .env WITHOUT overriding variables the caller exported (same precedence as dotenv
@@ -39,13 +40,58 @@ ca() { # name subject
   openssl req -x509 -new -key "$1.key" -sha256 -days "$DAYS" -subj "$2" -out "$1.crt" \
     -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" 2>/dev/null
 }
+# Run openssl quietly, but print its stderr and fail loudly when it errors — a silent
+# `2>/dev/null` turns an unsupported flag into an empty file and a mystery TLS failure later.
+ossl() {
+  local err; err="$(mktemp)"
+  if ! openssl "$@" 2>"$err"; then
+    echo "gen-certs: openssl $1 failed:" >&2; cat "$err" >&2; rm -f "$err"; return 1
+  fi
+  rm -f "$err"
+}
+
+csr() { # name subject
+  ossl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out "$1.key"
+  ossl req -new -key "$1.key" -subj "$2" -out "$1.csr"
+}
+
 leaf() { # name subject ca extfile [extra openssl x509 args…]
   local name="$1" subject="$2" caname="$3" ext="$4"; shift 4
-  openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out "$name.key" 2>/dev/null
-  openssl req -new -key "$name.key" -subj "$subject" -out "$name.csr" 2>/dev/null
-  openssl x509 -req -in "$name.csr" -CA "$caname.crt" -CAkey "$caname.key" -CAcreateserial -sha256 \
-    -extfile "$ext" -out "$name.crt" "$@" 2>/dev/null
+  csr "$name" "$subject"
+  ossl x509 -req -in "$name.csr" -CA "$caname.crt" -CAkey "$caname.key" -CAcreateserial -sha256 \
+    -extfile "$ext" -out "$name.crt" "$@"
   rm -f "$name.csr"
+}
+
+# An already-expired certificate. `openssl x509` only learned -not_before/-not_after in 3.5, so use
+# `openssl ca`, whose -startdate/-enddate have been there for decades and work on every runner.
+expired_leaf() { # name subject ca extfile
+  local name="$1" subject="$2" caname="$3" ext="$4"
+  csr "$name" "$subject"
+  mkdir -p ca-db/newcerts; : > ca-db/index.txt; echo 01 > ca-db/serial
+  cat > ca-db/ca.cnf <<'CNF'
+[ca]
+default_ca = CA_default
+[CA_default]
+dir = ./ca-db
+database = $dir/index.txt
+new_certs_dir = $dir/newcerts
+serial = $dir/serial
+default_md = sha256
+policy = policy_any
+email_in_dn = no
+rand_serial = no
+unique_subject = no
+[policy_any]
+commonName = supplied
+organizationalUnitName = optional
+organizationName = optional
+CNF
+  ossl ca -batch -config ca-db/ca.cnf -cert "$caname.crt" -keyfile "$caname.key" \
+    -extfile "$ext" -in "$name.csr" -out "$name.crt" -notext \
+    -startdate "$(date -u -d '30 days ago' +%Y%m%d%H%M%SZ)" \
+    -enddate "$(date -u -d '1 day ago' +%Y%m%d%H%M%SZ)"
+  rm -rf "$name.csr" ca-db
 }
 
 ca ca "/CN=mcp-auth-demo CA/O=mcp-auth-demo DEMO"
@@ -67,8 +113,7 @@ leaf server "/CN=${PUBLIC_HOST}/O=mcp-auth-demo DEMO" ca server.ext -days "$DAYS
 leaf alice "/CN=alice/OU=mcp-user/O=mcp-auth-demo DEMO" ca client.ext -days "$DAYS"
 leaf bob "/CN=bob/OU=mcp-admin/O=mcp-auth-demo DEMO" ca client.ext -days "$DAYS"
 # validity window entirely in the past → TLS handshake failure (certificate expired)
-leaf expired-alice "/CN=alice/OU=mcp-user/O=mcp-auth-demo DEMO" ca client.ext \
-  -not_before "$(date -u -d '30 days ago' +%Y%m%d%H%M%SZ)" -not_after "$(date -u -d '1 day ago' +%Y%m%d%H%M%SZ)"
+expired_leaf expired-alice "/CN=alice/OU=mcp-user/O=mcp-auth-demo DEMO" ca client.ext
 leaf rogue-client "/CN=alice/OU=mcp-admin/O=rogue" rogue-ca client.ext -days "$DAYS"
 
 rm -f server.ext client.ext ./*.srl

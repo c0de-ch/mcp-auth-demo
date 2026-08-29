@@ -34,7 +34,10 @@ prefix with `MCP_BROWSER_CMD="python3 scripts/browser-login.py --user alice --pa
 
 ```bash
 npx vitest run examples/11-python-mcp-keycloak      # spawns server.py: PRM shape = 04, 401/403/421 matrix, TS SDK round trips
-uv run --project examples/11-python-mcp-keycloak pytest   # hermetic verifier tests (expired/iss/aud/alg-none → None)
+npm run test:py    # hermetic verifier tests (expired/iss/aud/alg-none -> None)
+# equivalently: cd examples/11-python-mcp-keycloak && uv run pytest
+# (pytest must run with this directory as the cwd: there is no root pyproject.toml, so from the
+#  repo root its rootdir would be the repo and the tests could not import server.py)
 curl -s http://<host>:4111/.well-known/oauth-protected-resource/mcp | jq .   # the PRM
 curl -si -X POST http://<host>:4111/mcp -H 'Accept: application/json, text/event-stream' \
   -H 'Content-Type: application/json' -d '{}' | grep -i www-authenticate     # the 401 challenge

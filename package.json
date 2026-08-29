@@ -51,7 +51,8 @@
     "kc:reset": "bash scripts/kc.sh reset",
     "kc:logs": "bash scripts/kc.sh logs",
     "kc:status": "bash scripts/kc.sh status",
-    "kc:keys": "bash scripts/kc.sh keys"
+    "kc:keys": "bash scripts/kc.sh keys",
+    "test:py": "cd examples/11-python-mcp-keycloak && uv run pytest"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
