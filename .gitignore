@@ -1,0 +1,22 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+.mcp-auth/
+*.log
+.DS_Store
+# generated certificates (mTLS example) — regenerate with the provided script
+examples/**/certs/*.pem
+examples/**/certs/*.key
+examples/**/certs/*.crt
+examples/**/certs/*.srl
+# python
+.venv/
+__pycache__/
+*.pyc
+# playwright artefacts
+test-results/
+playwright-report/
+screenshots/
