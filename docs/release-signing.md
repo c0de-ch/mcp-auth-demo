@@ -14,7 +14,7 @@ built by the `release.yml` workflow of `c0de-ch/mcp-auth-demo`"*.
 |---|---|
 | `mcp-auth-demo-vX.Y.Z.tar.gz` — `git archive` of the tag | `mcp-auth-demo-vX.Y.Z.tar.gz.sigstore.json` (cosign bundle) + SLSA build-provenance attestation |
 | `SHA256SUMS` | `SHA256SUMS.sigstore.json` |
-| `ghcr.io/c0de-ch/mcp-auth-demo:vX.Y.Z` (also `:X.Y`, `:latest`) | cosign signature stored next to the image in the registry + SLSA provenance attestation pushed to the registry |
+| `ghcr.io/c0de-ch/mcp-auth-demo:X.Y.Z` (also `:X.Y`, `:latest`) — note the image tag has **no** `v` prefix, unlike the git tag | cosign signature stored next to the image in the registry + SLSA provenance attestation pushed to the registry |
 
 ## Verify the source archive
 
@@ -38,7 +38,7 @@ with `--certificate-identity` if you want to bind to the tag as well.
 ## Verify the container image
 
 ```bash
-cosign verify ghcr.io/c0de-ch/mcp-auth-demo:v0.1.0 \
+cosign verify ghcr.io/c0de-ch/mcp-auth-demo:0.1.0 \
   --certificate-identity-regexp '^https://github.com/c0de-ch/mcp-auth-demo/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -49,8 +49,18 @@ log index. Pin the digest (`ghcr.io/c0de-ch/mcp-auth-demo@sha256:…`) in anythi
 ## Verify the build provenance (SLSA)
 
 ```bash
+# needs gh >= 2.49 (`gh attestation` does not exist in older builds)
 gh attestation verify "mcp-auth-demo-$TAG.tar.gz" --repo c0de-ch/mcp-auth-demo
-gh attestation verify oci://ghcr.io/c0de-ch/mcp-auth-demo:v0.1.0 --repo c0de-ch/mcp-auth-demo
+gh attestation verify oci://ghcr.io/c0de-ch/mcp-auth-demo:0.1.0 --repo c0de-ch/mcp-auth-demo
+```
+
+The image's provenance is also readable with cosign alone, which is handy when `gh` is older:
+
+```bash
+cosign verify-attestation ghcr.io/c0de-ch/mcp-auth-demo:0.1.0 \
+  --type slsaprovenance1 \
+  --certificate-identity-regexp '^https://github.com/c0de-ch/mcp-auth-demo/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
 The attestation states which workflow, commit and runner built the artifact
@@ -68,7 +78,7 @@ moved or re-signed; fixes ship as a new patch version.
 
 ```bash
 docker run --rm -p 4104:4104 -e PUBLIC_HOST=192.168.1.10 \
-  ghcr.io/c0de-ch/mcp-auth-demo:v0.1.0 ex:04:server
+  ghcr.io/c0de-ch/mcp-auth-demo:0.1.0 ex:04:server
 ```
 
 `PUBLIC_HOST` must be the address other machines and Keycloak use to reach the host; the image runs
