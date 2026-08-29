@@ -10,7 +10,12 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "kc:up": "bash scripts/kc.sh up",
+    "kc:down": "bash scripts/kc.sh down",
+    "kc:reset": "bash scripts/kc.sh reset",
+    "kc:logs": "bash scripts/kc.sh logs",
+    "kc:status": "bash scripts/kc.sh status"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
