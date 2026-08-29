@@ -117,9 +117,23 @@ a DCR client only receives the `basic` scope plus what it asks for.
 
 This is also where the repository's **effective scopes** contract comes from: a token's `scope`
 says what the client was granted, a realm role says what the user is allowed to do, and
-`keycloakEffectiveScopes` in `src/shared/jwt.ts` keeps `mcp:admin` only when both agree. Alice can
-ask for `mcp:admin` and Keycloak will put it in her token's `scope` — she still does not get the
-tool, because she does not hold the role.
+`keycloakEffectiveScopes` in `src/shared/jwt.ts` keeps `mcp:admin` only when both agree.
+
+The role scope mappings mean Keycloak already enforces that agreement at issuance. Verified with
+client `mcp-test` requesting `scope=mcp:tools mcp:admin`:
+
+```
+alice -> scope "profile mcp:tools email"             realm_access.roles ["mcp-user"]
+bob   -> scope "profile mcp:tools email mcp:admin"   realm_access.roles ["mcp-user","mcp-admin"]
+```
+
+Alice may ask for `mcp:admin`; the authorization server simply does not issue it. That is the
+behaviour you want from a well-configured provider — and it is exactly why the resource server
+still checks. `keycloakEffectiveScopes` is defence in depth: a provider that issues whatever the
+client asks for, a misconfigured scope mapping, or a token minted before a role was revoked would
+all produce a token whose `scope` overstates what its subject may do. The hermetic tests of
+examples 04 and 05 mint precisely such a token to prove the resource server drops the scope
+anyway.
 
 ### Dynamic Client Registration
 
