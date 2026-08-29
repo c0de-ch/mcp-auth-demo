@@ -180,7 +180,9 @@ const EXAMPLES: Example[] = [
     steps: [
       { name: 'browser login (alice)', env: { ...browser('alice'), OAUTH_CLIENT_ID: 'mcp-cli' }, expect: user('alice', 'denied') },
       { name: 'revoke alice (admin logout)', script: 'examples/07-token-introspection/revoke.ts', args: ['alice'] },
-      { name: 'client again → 401', env: { MCP_NO_BROWSER: '1' }, exit: 1 },
+      // Same OAUTH_CLIENT_ID as the login step: the token store is keyed by client id, and this
+      // step exists to replay the REVOKED token from that store.
+      { name: 'client again → 401', env: { MCP_NO_BROWSER: '1', OAUTH_CLIENT_ID: 'mcp-cli' }, exit: 1 },
     ],
     negative: (url) => expect401(url, { resourceMetadata: true }),
   },
