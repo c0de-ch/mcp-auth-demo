@@ -532,7 +532,11 @@ export async function buildApp(o: { metadata?: OAuthMetadata; jwks?: JwksSource;
 full discovery trace (401 → PRM → `/.well-known/oauth-authorization-server/realms/mcp` (**verified**
 200 on the first probe) → DCR → authorize with `resource=` (sent, ignored) → token → retry) with real
 captured headers, and explains SEP-835 scope selection (PRM `scopes_supported` drives the request,
-so the client asks for `mcp:tools mcp:admin`; alice's token then *contains* `mcp:admin` in `scope`
+so the client asks for `mcp:tools mcp:admin`. (**Superseded during implementation:** the realm
+gained role scope mappings `mcp:tools → mcp-user`, `mcp:admin → mcp-admin` so that DCR clients
+receive realm roles at all, and Keycloak now filters `mcp:admin` out of alice's token at issuance —
+verified. `keycloakEffectiveScopes` remains as defence in depth; see `docs/keycloak.md`.) As
+originally written: alice's token then *contains* `mcp:admin` in `scope`
 **(verified)** but `keycloakEffectiveScopes` drops it — scope = client grant, role = user right).
 
 **Client** (`client.ts`): `CliOAuthProvider({ serverUrl })` + `connectWithOAuth`. DCR by default
@@ -829,7 +833,8 @@ the render step. Existing content, all **verified live**:
 | `mcp-server` | confidential, secret `{{MCP_SERVER_CLIENT_SECRET}}` (DEMO `mcp-server-secret-demo`), service account, `standard.token.exchange.enabled: true`, optional scope `downstream-api` |
 | `downstream-api` | confidential placeholder (secret `downstream-api-secret-demo`), no flows — exists as the exchange audience |
 | Anonymous DCR policies | Trusted Hosts **removed** (open anonymous registration — demo; hardened variant in `docs/keycloak.md`: `trusted-hosts` component with `host-sending-registration-request-must-match: false`, `client-uris-must-match: true`, hosts `127.0.0.1, localhost, {{PUBLIC_HOST}}`); `consent-required`; `scope` (full scope disabled); `max-clients: 200`; `allowed-client-templates` with `allowed-client-scopes: [mcp:tools, mcp:admin, offline_access]` (→ `openid` rejected with `insufficient_scope`); `allowed-protocol-mappers` |
-| Token claims (alice, `scope=mcp:tools mcp:admin`) | `iss=http://192.168.78.87:8180/realms/mcp`, `aud="mcp-server"`, `azp=mcp-cli`, `scope="mcp:tools email mcp:admin profile"`, `realm_access.roles=[mcp-user]`, `typ=Bearer`, `preferred_username=alice`, `sub=<uuid>` |
+| Token claims (alice, `scope=mcp:tools mcp:admin`) | `iss=http://192.168.78.87:8180/realms/mcp`, `aud="mcp-server"`, `azp=mcp-cli`, `scope="mcp:tools email profile"` (`mcp:admin` filtered at issuance since the role scope mappings
+were added), `realm_access.roles=[mcp-user]`, `typ=Bearer`, `preferred_username=alice`, `sub=<uuid>` |
 | Introspection | `POST …/token/introspect` with Basic `mcp-server` → `{ active: true, aud: "mcp-server", scope, username }` |
 | Token exchange | `mcp-server` + `scope=downstream-api` → `aud=downstream-api, azp=mcp-server, scope=downstream-api, sub=<alice>`; without `scope` → `invalid_request: Requested audience not available: downstream-api` |
 | Discovery | `/realms/mcp/.well-known/openid-configuration` **and** `/.well-known/oauth-authorization-server/realms/mcp` (both 200 → the SDK client's first probe succeeds); `grant_types_supported` includes `client_credentials`, `token-exchange`, `device_code`, `jwt-bearer`; `token_endpoint_auth_methods_supported` = `private_key_jwt, client_secret_basic, client_secret_post, tls_client_auth, client_secret_jwt`; `code_challenge_methods_supported` = `plain, S256` |

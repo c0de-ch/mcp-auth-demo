@@ -126,7 +126,7 @@ and the 403 challenge as `scope="…"`. Consequences, verified against Keycloak 
 | Wiring | 401 header | Client requests | Effect |
 |---|---|---|---|
 | `requireBearerAuth({ verifier, requiredScopes: ['mcp:tools'] })` | `scope="mcp:tools"` | `mcp:tools` only | least privilege; **bob can never obtain `mcp:admin` through the browser flow** (runtime step-up via 403 `insufficient_scope` is docs-only in v0.1) |
-| `createKeycloakVerifier({ requiredScopes: ['mcp:tools'] })` + `requireBearerAuth({ verifier, resourceMetadataUrl })` and PRM `scopesSupported: ['mcp:tools', 'mcp:admin']` | no `scope` | `mcp:tools mcp:admin` (from the PRM) | bob → `admin_only` ok; alice's token also *contains* `mcp:admin` but `keycloakEffectiveScopes()` drops it (no role); a token without `mcp:tools` → 403 `insufficient_scope` with `error_description="missing scope: mcp:tools"` (no `scope=` parameter) |
+| `createKeycloakVerifier({ requiredScopes: ['mcp:tools'] })` + `requireBearerAuth({ verifier, resourceMetadataUrl })` and PRM `scopesSupported: ['mcp:tools', 'mcp:admin']` | no `scope` | `mcp:tools mcp:admin` (from the PRM) | bob → `admin_only` ok; alice does not get `mcp:admin` — Keycloak filters it at issuance (role scope mappings) and `keycloakEffectiveScopes()` would drop it anyway (defence in depth); a token without `mcp:tools` → 403 `insufficient_scope` with `error_description="missing scope: mcp:tools"` (no `scope=` parameter) |
 
 The smoke expectation table (bob → admin ok via browser in 03/04/06/07…) assumes the **second**
 wiring for Keycloak examples; use the first only where a fixed minimal scope is the point.
