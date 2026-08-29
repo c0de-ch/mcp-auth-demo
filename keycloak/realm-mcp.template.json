@@ -90,6 +90,14 @@
       ]
     },
     {
+      "username": "service-account-mcp-service-jwt",
+      "enabled": true,
+      "serviceAccountClientId": "mcp-service-jwt",
+      "realmRoles": [
+        "mcp-user"
+      ]
+    },
+    {
       "username": "service-account-mcp-server",
       "enabled": true,
       "serviceAccountClientId": "mcp-server",
@@ -421,12 +429,13 @@
     {
       "clientId": "mcp-cli",
       "name": "MCP CLI client (public, PKCE)",
+      "description": "Public client for humans: authorization code + PKCE S256 only",
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": true,
       "standardFlowEnabled": true,
       "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": true,
+      "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "redirectUris": [
         "http://localhost:{{OAUTH_CALLBACK_PORT}}/callback",
@@ -457,6 +466,33 @@
       ]
     },
     {
+      "clientId": "mcp-test",
+      "name": "TEST ONLY — password grant for headless tests",
+      "description": "TEST ONLY: Resource Owner Password grant (removed from OAuth 2.1) so vitest can mint user tokens without a browser. Never use this client from real code.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": true,
+      "defaultClientScopes": [
+        "profile",
+        "email",
+        "roles",
+        "web-origins",
+        "basic",
+        "acr",
+        "mcp:tools"
+      ],
+      "optionalClientScopes": [
+        "mcp:admin",
+        "downstream-api",
+        "offline_access"
+      ]
+    },
+    {
       "clientId": "mcp-service",
       "name": "MCP service account (client_credentials, example 05)",
       "enabled": true,
@@ -467,6 +503,33 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": true,
+      "fullScopeAllowed": true,
+      "defaultClientScopes": [
+        "roles",
+        "basic",
+        "mcp:tools"
+      ],
+      "optionalClientScopes": [
+        "mcp:admin"
+      ]
+    },
+    {
+      "clientId": "mcp-service-jwt",
+      "name": "MCP service account authenticating with private_key_jwt (example 05 variant)",
+      "description": "Confidential client whose credential is an RSA key pair (RFC 7523 client assertion) instead of a shared secret. Public key rendered from keycloak/.generated/mcp-service-jwt.pub by scripts/kc.sh keys.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-jwt",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "attributes": {
+        "jwt.credential.public.key": "{{MCP_SERVICE_JWT_PUBLIC_KEY}}",
+        "token.endpoint.auth.signing.alg": "RS256",
+        "use.jwks.url": "false"
+      },
       "fullScopeAllowed": true,
       "defaultClientScopes": [
         "roles",

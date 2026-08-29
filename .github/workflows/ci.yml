@@ -30,7 +30,8 @@ jobs:
           sed -i 's/^PUBLIC_HOST=.*/PUBLIC_HOST=127.0.0.1/' .env
           npm run kc:up
 
-      - run: npm test
+      # REQUIRE_KEYCLOAK=1: a Keycloak-backed suite that would be skipped fails instead
+      - run: npm run test:kc
 
       - name: Keycloak logs (on failure)
         if: failure()
