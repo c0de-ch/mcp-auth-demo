@@ -356,7 +356,7 @@
     {
       "name": "mcp:tools",
       "protocol": "openid-connect",
-      "description": "Call the standard MCP demo tools (adds audience mcp-server)",
+      "description": "Call the standard MCP demo tools (adds audience mcp-server, realm roles and preferred_username so DCR-registered clients get them too)",
       "attributes": {
         "include.in.token.scope": "true",
         "display.on.consent.screen": "true",
@@ -372,6 +372,35 @@
             "included.custom.audience": "mcp-server",
             "access.token.claim": "true",
             "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "foo",
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "username",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "username",
+            "claim.name": "preferred_username",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
             "introspection.token.claim": "true"
           }
         }
@@ -425,6 +454,26 @@
       ]
     }
   ],
+  "scopeMappings": [
+    {
+      "clientScope": "mcp:tools",
+      "roles": [
+        "mcp-user"
+      ]
+    },
+    {
+      "clientScope": "mcp:admin",
+      "roles": [
+        "mcp-admin"
+      ]
+    },
+    {
+      "clientScope": "offline_access",
+      "roles": [
+        "offline_access"
+      ]
+    }
+  ],
   "clients": [
     {
       "clientId": "mcp-cli",
@@ -467,7 +516,7 @@
     },
     {
       "clientId": "mcp-test",
-      "name": "TEST ONLY — password grant for headless tests",
+      "name": "TEST ONLY \u2014 password grant for headless tests",
       "description": "TEST ONLY: Resource Owner Password grant (removed from OAuth 2.1) so vitest can mint user tokens without a browser. Never use this client from real code.",
       "enabled": true,
       "protocol": "openid-connect",

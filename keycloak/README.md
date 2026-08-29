@@ -20,7 +20,8 @@ change; also wipes dynamically registered clients), `logs`, `status`, `keys [--f
 | Client `mcp-service-jwt` | confidential, service account authenticating with **`private_key_jwt`** (RFC 7523); public key rendered from `keycloak/.generated/mcp-service-jwt.pub` (`npm run kc:keys`, run automatically by `kc:up`) — example 05 variant |
 | Client `mcp-server` | confidential, introspection + standard token exchange — examples 07 / 10 |
 | Client `downstream-api` | audience-only placeholder for the downstream API — example 10 |
-| Client scopes | `mcp:tools` (default; adds `aud=mcp-server`), `mcp:admin` (optional; `aud=mcp-server`), `downstream-api` (optional; `aud=downstream-api`) |
+| Client scopes | `mcp:tools` (default; adds `aud=mcp-server`, `realm_access.roles` and `preferred_username` — so Dynamically-Registered clients, which only get `basic` + the requested scopes, still receive them), `mcp:admin` (optional; `aud=mcp-server`), `downstream-api` (optional; `aud=downstream-api`) |
+| Role scope mappings | `mcp:tools` → `mcp-user`, `mcp:admin` → `mcp-admin`: a role only appears in a token when the client's scopes map it (DCR clients have full-scope disabled), so `mcp-admin` shows up only for clients that requested `mcp:admin` and users who hold the role |
 | Dynamic Client Registration | anonymous registration allowed; registered clients get consent-required, default scopes, and may request `mcp:tools` / `mcp:admin` / `offline_access` (**not** `openid` — not a Keycloak client scope) |
 | Token lifetime | access tokens 15 min |
 
