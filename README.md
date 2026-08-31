@@ -133,7 +133,7 @@ headlessly with Playwright and checks what each client actually printed.
 
 | Page | What it covers |
 |---|---|
-| [course.html](docs/course.html) | **Start here if you are learning.** A fourteen-episode lesson over all twelve examples, each with a read-aloud script |
+| [course.md](docs/course.md) · [course.html](docs/course.html) | **Start here if you are learning.** A fourteen-episode lesson over all twelve examples, each with a read-aloud script — as Markdown, or as a standalone page with diagrams |
 | [comparison.md](docs/comparison.md) | The matrix, and which approach to choose when |
 | [spec-background.md](docs/spec-background.md) | The MCP authorization spec and the RFCs it builds on |
 | [sdk-notes.md](docs/sdk-notes.md) | Verified behaviour of SDK 1.30.0 — the things that silently break auth |
