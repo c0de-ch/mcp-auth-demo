@@ -60,7 +60,7 @@ so `aud` never fires inside "audience".
 
 ## Listening on the LAN
 
-`npm run course:serve` publishes the lot on this machine — the lesson page, the Markdown, the audio,
+`npm run course:serve` (or `course:server` — both work) publishes the lot on this machine — the lesson page, the Markdown, the audio,
 and a podcast feed:
 
 ```

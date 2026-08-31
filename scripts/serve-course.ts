@@ -3,7 +3,7 @@
  * audio, and a podcast feed you can subscribe to from a phone on the same network.
  *
  *   npm run audio            # render the audio first (scripts/render-audio.sh)
- *   npm run course:serve     # → http://<PUBLIC_HOST>:4120/
+ *   npm run course:serve     # → http://<PUBLIC_HOST>:4120/   (also: npm run course:server)
  *
  *   /            docs/course.html          the lesson page
  *   /course.md   docs/course.md            the Markdown edition

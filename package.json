@@ -15,6 +15,7 @@
     "smoke": "tsx scripts/smoke.ts",
     "audio": "bash scripts/render-audio.sh",
     "course:serve": "tsx scripts/serve-course.ts",
+    "course:server": "tsx scripts/serve-course.ts",
     "ex:00:server": "tsx examples/00-baseline-no-auth/server.ts",
     "ex:00:client": "tsx examples/00-baseline-no-auth/client.ts",
     "ex:01:server": "tsx examples/01-api-key/server.ts",
