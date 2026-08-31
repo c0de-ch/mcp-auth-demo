@@ -130,6 +130,24 @@ export function buildApp(): express.Express {
   app.get('/course.md', (_req, res) => res.type('text/markdown; charset=utf-8').sendFile(join(DOCS, 'course.md')));
   app.get('/feed.xml', (_req, res) => res.type('application/rss+xml; charset=utf-8').send(feed(tracks())));
 
+  // The lesson page fetches this and attaches a player per episode. It 404s everywhere the
+  // audio is not being served (the published artifact, a file:// open), and the page then
+  // simply renders without players.
+  app.get('/tracks.json', (_req, res) =>
+    res.json(
+      tracks().map((t, i) => ({
+        episode: i,
+        slug: t.slug,
+        title: t.title,
+        duration: hms(t.seconds),
+        seconds: Math.round(t.seconds),
+        bytes: t.bytes,
+        type: t.type,
+        url: `/audio/${encodeURIComponent(t.slug)}${t.type === 'audio/ogg' ? '.opus' : '.wav'}`,
+      })),
+    ),
+  );
+
   app.get('/audio/:name', (req, res) => {
     // Whitelist by generated name: never join user input onto a path.
     const wanted = req.params.name;

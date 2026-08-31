@@ -258,6 +258,15 @@ td a{font-weight:500}
 }
 .script em{color:var(--brass-2);font-style:italic}
 
+/* audio player — only ever present when the page is served alongside its audio */
+.player{display:flex;flex-wrap:wrap;align-items:center;gap:.55rem .9rem;padding:.15rem 0 .1rem}
+.player-label{
+  font-family:"IBM Plex Mono",monospace;font-size:.7rem;text-transform:uppercase;
+  letter-spacing:.11em;color:var(--brass);white-space:nowrap;
+}
+.player audio{height:2rem;flex:1 1 18rem;min-width:0;max-width:100%}
+body.rec .player{display:none}
+
 /* recording view */
 body.rec main > section > *:not(.script):not(.ep-head){display:none}
 body.rec .figbox,body.rec .tablewrap{display:none}
@@ -2508,6 +2517,34 @@ npm run smoke       <span class="c"># end-to-end: real ports, real headless brow
 
   var reset = document.getElementById('resetProgress');
   if (reset) reset.addEventListener('click', function () { store.write({}); paint({}); });
+
+  /* Audio. When the page is served by scripts/serve-course.ts the rendered narration sits
+     next to it, so attach a player per episode. The page's script blocks and the track list
+     both follow the course's own order, so an indexed zip is enough and there is no slug
+     map to keep in step. Anywhere else — the published artifact, a file:// open — the fetch
+     fails and the page simply renders without players. */
+  var scripts = Array.prototype.slice.call(document.querySelectorAll('.script'));
+  fetch('tracks.json', { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('no audio')); })
+    .then(function (list) {
+      if (!Array.isArray(list) || list.length !== scripts.length) return;
+      scripts.forEach(function (block, i) {
+        var track = list[i];
+        var wrap = document.createElement('div');
+        wrap.className = 'player';
+        var label = document.createElement('span');
+        label.className = 'player-label';
+        label.textContent = 'Listen · ' + track.duration;
+        var audio = document.createElement('audio');
+        audio.controls = true;
+        audio.preload = 'none';
+        audio.src = track.url;
+        wrap.appendChild(label);
+        wrap.appendChild(audio);
+        block.insertBefore(wrap, block.firstElementChild.nextSibling);
+      });
+    })
+    .catch(function () { /* no audio being served — the scripts read fine on their own */ });
 
   /* Recording view: scripts only, for reading aloud. */
   var rec = document.getElementById('recToggle');

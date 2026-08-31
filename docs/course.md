@@ -9,7 +9,9 @@ every example yourself.
 > page with hand-drawn diagrams, progress tracking and a scripts-only "recording view" — open it in
 > a browser. **`course.html` is the source of truth**; this page tracks it.
 >
-> There are no audio recordings. The scripts are written to be *read* aloud, by you or by a TTS tool.
+> The scripts are written to be read aloud. [`course-audio.md`](course-audio.md) renders them to
+> speech locally with piper — 55 minutes across fourteen tracks — and `npm run course:serve`
+> publishes the lot on your network with a player on every episode and a podcast feed.
 
 **Who this is for:** developers who can read TypeScript but treat PKCE, JWKS, audience and
 introspection as things to learn from scratch. If you already know OAuth and just want to choose an
