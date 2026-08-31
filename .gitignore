@@ -22,3 +22,8 @@ playwright-report/
 screenshots/
 # rendered from keycloak/realm-mcp.template.json by scripts/kc.sh
 keycloak/.generated/
+
+# course audio (scripts/render-audio.sh): the venv, the ~120 MB voice model and the
+# rendered speech. 61 minutes of WAV is ~155 MB — publish it, do not commit it.
+/.audio/
+/audio/
