@@ -107,6 +107,26 @@ assembled from, and each slide holds until the next paragraph's cumulative start
 was built this was verified by extracting a frame just after each cut and comparing it with that
 paragraph's slide; `npm run video` itself does not repeat that check.
 
+## A real presenter
+
+The drawn presenter is what this machine can make on its own. For a photoreal one — a person
+speaking the narration, as on television — the pipeline accepts **presenter clips**: one video per
+episode, the presenter alone, whatever produced it. When `video/presenter/<slug>.mp4` exists,
+`npm run video` composes that episode with a presenter panel in the bottom-right instead of the drawn
+badge, and reserves the panel's column so nothing on the slide runs under it. Episodes without a clip
+keep the drawn presenter, so a partial set still yields a complete course.
+
+[`scripts/presenter/kaggle-presenter.ipynb`](../scripts/presenter/kaggle-presenter.ipynb) makes the
+clips on free Kaggle GPU time with open models: a synthetic portrait from SDXL-Turbo — nobody's
+likeness — animated by SadTalker and sharpened by GFPGAN. Run it as its first cell says: attach the
+narration package it asks for, render one episode to judge the presenter, then all fourteen (a few
+hours, resumable). Download `presenter-clips.zip`, unzip it into `video/`, and run `npm run video`.
+
+The notebook carries the five patches SadTalker needs on a current Python stack (a torchvision
+import in basicsr, librosa's keyword-only mel filter, and three numpy 2 strictnesses), each verified
+end to end on CPU before the notebook was written. If a future Kaggle image breaks something, the
+install cell fails immediately and says what — nothing runs for an hour before failing.
+
 ## Listening on the LAN
 
 `npm run course:serve` (or `course:server` — both work) publishes the lot on this machine — the lesson page, the Markdown, the audio,

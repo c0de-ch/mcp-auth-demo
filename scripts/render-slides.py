@@ -435,12 +435,12 @@ def slide_files(out: pathlib.Path, timeline: dict) -> list[pathlib.Path]:
     return [folder / "title.png"] + [folder / f"p{e['index']:04d}.png" for e in timeline["entries"]]
 
 
-def slides_hash(ep: dict, timeline: dict, script: str) -> str:
+def slides_hash(ep: dict, timeline: dict, script: str, gutter: int = 0) -> str:
     """Everything an episode's slides are a function of: its course.json entry, which paragraphs the
     narration cut it into (not their timing — a re-take with the same text needs no new slides), and
     this script, template included."""
     cues = [[e["index"], e["segment"], e["paragraph"], e["beat"]] for e in timeline["entries"]]
-    return hashlib.sha256(json.dumps([ep, cues, script], sort_keys=True).encode()).hexdigest()[:16]
+    return hashlib.sha256(json.dumps([ep, cues, script, gutter], sort_keys=True).encode()).hexdigest()[:16]
 
 
 def is_png(path: pathlib.Path) -> bool:
@@ -475,7 +475,7 @@ def write_if_changed(path: pathlib.Path, data: bytes) -> bool:
     return True
 
 
-def render_episode(page, ep: dict, timeline: dict, files: list[pathlib.Path]) -> int:
+def render_episode(page, ep: dict, timeline: dict, files: list[pathlib.Path], gutter: int = 0) -> int:
     """All slides of one episode on one page load. Returns how many files actually changed."""
     slug = ep["slug"]
     paragraphs = [(seg["beat"], p) for seg in ep["segments"] for p in seg["paragraphs"]]
@@ -484,6 +484,9 @@ def render_episode(page, ep: dict, timeline: dict, files: list[pathlib.Path]) ->
         raise SystemExit(f"{slug}: timeline has {len(entries)} entries but course.json has {len(paragraphs)} paragraphs — rerun render-course.py --only {slug}")
 
     page.set_content(TEMPLATE)
+    if gutter:
+        # A presenter panel lives in the bottom-right; the content stays out of its column.
+        page.add_style_tag(content=f".body{{padding-right:{96 + gutter}px}} .hero{{padding-right:{96 + gutter}px}}")
     missing = page.evaluate("() => slides.ready()")
     if missing:
         raise SystemExit(f"{slug}: fonts unavailable ({', '.join(missing)}) — not rendering with the fallback stacks; check the network and rerun")
@@ -540,6 +543,8 @@ def main() -> int:
     ap.add_argument("--timeline", default=str(REPO / "audio" / "timeline.json"))
     ap.add_argument("--out", default=str(REPO / "video" / "slides"))
     ap.add_argument("--only", metavar="SLUG", help="render one episode")
+    ap.add_argument("--gutter", type=int, default=0, metavar="PX",
+                    help="reserve this many pixels at the right of every slide for a presenter panel (render-video.sh passes 400 when presenter clips exist)")
     args = ap.parse_args()
 
     course_path, timeline_path, out = pathlib.Path(args.course), pathlib.Path(args.timeline), pathlib.Path(args.out)
@@ -564,11 +569,11 @@ def main() -> int:
                 raise SystemExit(f"{slug} is in the timeline but not in {course_path} — rerun course-audio.py --json")
             files = slide_files(out, timeline)
             manifest = out / slug / "manifest.json"
-            digest = slides_hash(course[slug], timeline, script)
+            digest = slides_hash(course[slug], timeline, script, args.gutter)
             if up_to_date(manifest, digest, files):
                 print(f"    {slug:<52} {len(files):3d} slides — up to date")
                 continue
-            changed = render_episode(page, course[slug], timeline, files)
+            changed = render_episode(page, course[slug], timeline, files, args.gutter)
             write_if_changed(manifest, (json.dumps({"hash": digest, "slides": [f.name for f in files]}, indent=1) + "\n").encode())
             print(f"    {slug:<52} {len(files):3d} slides" + ("" if changed else " — unchanged"))
         browser.close()
