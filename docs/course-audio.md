@@ -22,6 +22,7 @@ text has not changed is skipped.
 | [`uv`](https://docs.astral.sh/uv/) | creates the Python 3.12 environment piper runs in |
 | `ffmpeg` | only for `--opus`, and for `npm run video` |
 | Playwright for Python, with its Chromium | only for `npm run video` — the slides are screenshots |
+| Pillow (`PIL`) | only for `npm run video` — the presenter is drawn with it |
 
 ## Knobs
 
@@ -86,12 +87,17 @@ text, audio and slides have not changed is skipped:
    the current figure beside it, or as a band above it when the figure is wide, and a progress bar
    along the bottom. The layout and the figure's size are chosen once for every run of paragraphs
    that share a figure, so the figure holds still across those cuts.
-4. `scripts/render-video.sh` shows each slide for exactly the seconds its paragraph occupies, after a
+4. `scripts/render-avatar.py` draws the presenter: a face in the course's own style that speaks
+   along with the narration — the mouth opens with the loudness of the voice, a ring pulses around it
+   like an active-speaker indicator, and it blinks now and then. It is driven by the audio frame by
+   frame, so it cannot drift from the words. It sits at the right end of every slide's header; the
+   title card and the poster carry a larger resting face.
+5. `scripts/render-video.sh` shows each slide for exactly the seconds its paragraph occupies, after a
    short lead-in on the title card, puts the narration underneath and encodes H.264 with AAC audio
    (`libx264`, CRF 23, 24 fps, `faststart` so playback starts before the download ends). The title
    card is also written as `video/<track>.jpg`, the poster.
 
-Measured for the full course: **58:41 across fourteen MP4s, 100 MB** — between 5 and 12 MB each, so
+Measured for the full course: **58:41 across fourteen MP4s, 111 MB** — between 5 and 14 MB each, so
 smaller than the WAVs and in the same range as the Opus files, because a slide that does not move
 costs almost nothing to encode. `video/` is git-ignored like `audio/`; distribute the MP4s as release
 assets the same way.
@@ -103,7 +109,7 @@ paragraph's slide; `npm run video` itself does not repeat that check.
 
 ## Listening on the LAN
 
-`npm run course:serve` publishes the lot on this machine — the lesson page, the Markdown, the audio,
+`npm run course:serve` (or `course:server` — both work) publishes the lot on this machine — the lesson page, the Markdown, the audio,
 the video where it has been rendered, and a podcast feed for each:
 
 ```

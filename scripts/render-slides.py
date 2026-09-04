@@ -90,7 +90,7 @@ strong{{font-weight:600}}
 
 .slide{{position:absolute;inset:0;display:flex;flex-direction:column}}
 .strip{{
-  flex:none;height:92px;padding:0 96px;display:flex;align-items:center;justify-content:space-between;
+  flex:none;height:112px;padding:0 208px 0 96px;display:flex;align-items:center;justify-content:space-between;
   gap:48px;border-bottom:1px solid var(--rule);background:var(--surface);
 }}
 .eyebrow{{
@@ -100,7 +100,7 @@ strong{{font-weight:600}}
 .eyebrow b{{color:var(--brass);font-weight:500}}
 
 /* ── title card ─────────────────────────────────────────────────────────── */
-.hero{{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:44px;padding:48px 96px 120px;overflow:hidden}}
+.hero{{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:44px;padding:48px 400px 120px 96px;overflow:hidden}}
 .ep-n{{
   font-family:var(--display);font-weight:800;font-size:176px;line-height:.85;letter-spacing:-.04em;
   color:var(--brass);font-variant-numeric:tabular-nums;
