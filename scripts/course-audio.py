@@ -20,6 +20,7 @@ What it does to the Markdown, in order:
 from __future__ import annotations
 
 import argparse
+import html as htmllib
 import json
 import pathlib
 import re
@@ -27,6 +28,7 @@ import sys
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 COURSE = REPO / "docs" / "course.md"
+COURSE_HTML = REPO / "docs" / "course.html"
 
 # Longest first: 'mcp:tools' must win before 'MCP'. Keys are matched whole-word where the
 # key is word-shaped, so 'aud' never fires inside 'audience'.
@@ -107,6 +109,86 @@ def to_speech(md: str) -> str:
     return "\n\n".join(paragraphs) + "\n"
 
 
+def inline_html(md: str) -> str:
+    """Markdown inline marks → HTML, for showing a paragraph on screen."""
+    text = htmllib.escape(md, quote=False)
+    text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+    text = re.sub(r"\*(.+?)\*", r"<em>\1</em>", text)
+    text = re.sub(r"`(.+?)`", r"<code>\1</code>", text)
+    return text
+
+
+def segments_of(md: str) -> list[dict]:
+    """One <details> body → [{beat, paragraphs:[{display_html, spoken}]}], beats as boundaries."""
+    out: list[dict] = [{"beat": None, "paragraphs": []}]
+    for chunk in re.split(r"\n\s*\n", md.strip()):
+        chunk = chunk.strip()
+        if not chunk or SUMMARY.match(chunk):
+            continue
+        if BEAT.match(chunk):
+            beat = re.sub(r"^\*\*Beat\s*[—-]\s*|\*\*$", "", chunk).strip()
+            if out[-1]["paragraphs"]:
+                out.append({"beat": beat, "paragraphs": []})
+            else:
+                out[-1]["beat"] = beat
+            continue
+        joined = " ".join(line.strip() for line in chunk.splitlines())
+        out[-1]["paragraphs"].append({"display_html": inline_html(joined), "spoken": to_speech(chunk).strip()})
+    return [seg for seg in out if seg["paragraphs"]]
+
+
+VISUAL = re.compile(
+    r"<figure>.*?</figure>|<pre class=\"(?:term|code)\">.*?</pre>|<div class=\"tablewrap\">.*?</table>\s*</div>",
+    re.S,
+)
+
+
+def visuals_of_html(course_html: str) -> list[dict]:
+    """Per script-bearing <section> of course.html (in order): label, kicker and the lesson's figures/code."""
+    out: list[dict] = []
+    for sec in re.finditer(r'<section id="([\w-]+)"[^>]*>(.*?)</section>', course_html, re.S):
+        body = sec.group(2)
+        if 'class="script"' not in body:
+            continue
+        lesson = body.split('<div class="script">', 1)[0]
+        label = re.search(r'<div class="ep-n">(.*?)</div>', lesson, re.S)
+        kicker = re.search(r'<p class="ep-sub">(.*?)</p>', lesson, re.S)
+        visuals = []
+        for m in VISUAL.finditer(lesson):
+            block = m.group(0)
+            kind = "figure" if block.startswith("<figure") else "table" if block.startswith("<div") else ("term" if 'class="term"' in block[:20] else "code")
+            visuals.append({"kind": kind, "html": block})
+        out.append({
+            "id": sec.group(1),
+            "label": htmllib.unescape(re.sub(r"<[^>]+>", "", label.group(1))).strip() if label else "",
+            "kicker": " ".join(htmllib.unescape(re.sub(r"<[^>]+>", "", kicker.group(1))).split()) if kicker else "",
+            "visuals": visuals,
+        })
+    return out
+
+
+def structured(course: str, course_html: str) -> list[dict]:
+    """course.md's scripts zipped with course.html's visuals, by course order."""
+    flat = episodes(course)
+    bodies = re.findall(r"<details>(.*?)</details>", course, re.S)
+    pages = visuals_of_html(course_html)
+    if not (len(flat) == len(bodies) == len(pages)):
+        raise SystemExit(f"course.md has {len(flat)} scripts but course.html has {len(pages)} script-bearing sections")
+    out = []
+    for ep, body, page in zip(flat, bodies, pages):
+        out.append({
+            "track": ep["track"],
+            "slug": ep["slug"],
+            "title": ep["title"],
+            "label": page["label"],
+            "kicker": page["kicker"],
+            "section": page["id"],
+            "visuals": page["visuals"],
+            "segments": segments_of(body),
+        })
+    return out
+
+
 def episodes(course: str) -> list[dict]:
     """Pair every <details> script with the '## ' heading above it, in document order."""
     out: list[dict] = []
@@ -134,6 +216,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default="audio/text", help="directory for the .txt files (default: audio/text)")
     ap.add_argument("--course", default=str(COURSE), help="path to course.md")
+    ap.add_argument("--json", action="store_true", help="also write <out>/../course.json: segments, paragraphs and the lesson's visuals, for the video pipeline")
     args = ap.parse_args()
 
     course = pathlib.Path(args.course).read_text()
@@ -153,6 +236,16 @@ def main() -> int:
 
     manifest = [{k: v for k, v in ep.items() if k != "text"} for ep in found]
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+
+    if args.json:
+        data = structured(course, COURSE_HTML.read_text())
+        target = out.parent / "course.json"
+        text = json.dumps(data, indent=1) + "\n"
+        if not target.exists() or target.read_text() != text:  # mtime again: render-slides.py keys off it
+            target.write_text(text)
+        paragraphs = sum(len(seg["paragraphs"]) for ep in data for seg in ep["segments"])
+        visuals = sum(len(ep["visuals"]) for ep in data)
+        print(f"{len(data)} episodes → {target}  ({paragraphs} paragraphs, {visuals} visuals)")
 
     total = sum(ep["words"] for ep in found)
     print(f"{len(found)} scripts → {out}  ({total:,} words, ~{round(total / 150)} min at 150 wpm)")

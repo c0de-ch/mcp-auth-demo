@@ -10,7 +10,7 @@ every example yourself.
 > a browser. **`course.html` is the source of truth**; this page tracks it.
 >
 > The scripts are written to be read aloud. [`course-audio.md`](course-audio.md) renders them to
-> speech locally with piper — 55 minutes across fourteen tracks — and `npm run course:serve`
+> speech locally with piper — 58 minutes across fourteen tracks — and `npm run course:serve`
 > publishes the lot on your network with a player on every episode and a podcast feed.
 
 **Who this is for:** developers who can read TypeScript but treat PKCE, JWKS, audience and
@@ -1192,10 +1192,10 @@ configurable number of seconds.
                                   │ alice · t = 4 min
    04  JWKS, offline  ████████████│████████████████████████   still accepted, for 11 more minutes
    07  introspection  ████████████│█                          401 from here on
-                                  └─┤ the gap is your cache TTL (10 s default, 0 = every request)
+                                  └─┤ the gap is your cache TTL (default 10 s; 0 = always ask)
 ```
 
-The width of that little box is the only thing you are tuning: revocation latency against load on your
+The width of that little box is the only knob: revocation latency against load on your
 identity provider.
 
 ```bash
@@ -1308,7 +1308,7 @@ sequenceDiagram
     S-->>C: finished
     Note over C,S: only now does HTTP begin
     C->>S: POST /mcp — peer certificate already verified
-    Note over S: CN → clientId · OU mcp-admin → mcp:admin · notAfter → expiresAt
+    Note over S: CN → clientId · OU mcp-admin → mcp:admin · notAfter → exp
 ```
 
 No certificate, expired, or unknown CA → the connection never becomes HTTP, and your application code
@@ -1420,7 +1420,7 @@ assertion, and the difference between those two things is the entire episode.
 
 ```mermaid
 flowchart LR
-    C["MCP client<br/>04's client, unchanged"]
+    C["MCP client<br/>04's client, as is"]
     G["gateway :4109<br/>serves the PRM · verifies the JWT<br/>strips Authorization and every<br/>inbound X-Forwarded-* header"]
     I["internal MCP :4119<br/>has never heard of OAuth<br/>verifies the assertion, aud mcp-internal,<br/>replay cache · runs the tools"]
     A["attacker"]

@@ -142,7 +142,7 @@ headlessly with Playwright and checks what each client actually printed.
 | [lan-testing.md](docs/lan-testing.md) | `PUBLIC_HOST`, ports, remote browsers, TLS |
 | [patterns.md](docs/patterns.md) | Documented but not implemented, and why |
 | [glossary.md](docs/glossary.md) | The vocabulary, with pointers to where each term appears |
-| [course-audio.md](docs/course-audio.md) | Rendering the course scripts to speech locally with piper |
+| [course-audio.md](docs/course-audio.md) | Rendering the course to speech (piper) and to video (slides + ffmpeg) locally, and serving both on the LAN |
 | [release-signing.md](docs/release-signing.md) | Verifying releases with Sigstore cosign |
 | [design.md](docs/design.md) | How the repository was designed, and the decisions behind it |
 

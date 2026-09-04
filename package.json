@@ -14,6 +14,7 @@
     "test:kc": "REQUIRE_KEYCLOAK=1 vitest run",
     "smoke": "tsx scripts/smoke.ts",
     "audio": "bash scripts/render-audio.sh",
+    "video": "bash scripts/render-video.sh",
     "course:serve": "tsx scripts/serve-course.ts",
     "ex:00:server": "tsx examples/00-baseline-no-auth/server.ts",
     "ex:00:client": "tsx examples/00-baseline-no-auth/client.ts",
