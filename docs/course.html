@@ -258,14 +258,22 @@ td a{font-weight:500}
 }
 .script em{color:var(--brass-2);font-style:italic}
 
-/* audio player — only ever present when the page is served alongside its audio */
+/* audio player, and the Watch button of episodes that also have a video — only ever present
+   when the page is served alongside them */
 .player{display:flex;flex-wrap:wrap;align-items:center;gap:.55rem .9rem;padding:.15rem 0 .1rem}
 .player-label{
   font-family:"IBM Plex Mono",monospace;font-size:.7rem;text-transform:uppercase;
   letter-spacing:.11em;color:var(--brass);white-space:nowrap;
 }
 .player audio{height:2rem;flex:1 1 18rem;min-width:0;max-width:100%}
+.player-watch{
+  font-family:"IBM Plex Mono",monospace;font-size:.7rem;letter-spacing:.11em;
+  background:none;border:1px solid var(--rule);color:var(--muted);padding:.3rem .55rem;border-radius:2px;cursor:pointer;
+}
+.player-watch:hover,.player-watch[aria-expanded="true"]{border-color:var(--brass);color:var(--brass)}
+.player-video{display:block;width:100%;max-width:100%;aspect-ratio:16/9;border-radius:3px;margin-top:.6rem;background:var(--term-bg)}
 body.rec .player{display:none}
+body.rec .player-video{display:none}
 
 /* recording view */
 body.rec main > section > *:not(.script):not(.ep-head){display:none}
@@ -280,7 +288,7 @@ footer a{color:var(--ink-2)}
 
 @media (prefers-reduced-motion:no-preference){
   .rail a{transition:color .12s ease,background .12s ease,border-color .12s ease}
-  .tbtn{transition:color .12s ease,border-color .12s ease}
+  .tbtn,.player-watch{transition:color .12s ease,border-color .12s ease}
 }
 </style>
 </head>
@@ -413,7 +421,8 @@ footer a{color:var(--ink-2)}
           <text x="634" y="180" class="t-lbl" text-anchor="middle">hashed key table · JWKS signature · own token store</text>
           <text x="634" y="196" class="t-lbl" text-anchor="middle">introspection call · TLS peer certificate · signed assertion</text>
 
-          <text x="814" y="158" class="t-lbl">AuthInfo { clientId, scopes[], expiresAt, extra }</text>
+          <text x="814" y="152" class="t-lbl">AuthInfo { clientId, scopes[],</text>
+          <text x="814" y="168" class="t-lbl">expiresAt, extra }</text>
           <text x="16" y="196" class="t-lbl">Swapping the authentication</text>
           <text x="16" y="212" class="t-lbl">never touches a tool.</text>
         </svg>
@@ -1225,8 +1234,8 @@ npm run ex:03:client -- --logout   <span class="c"># wipe the client's token sto
           <line x1="80" y1="534" x2="298" y2="534" class="ln-acc" marker-end="url(#ah-a)"/>
           <text x="190" y="526" class="t-acc" text-anchor="middle">POST /mcp · Authorization: Bearer …  → 200</text>
 
-          <text x="620" y="534" class="t-lbl">the client was configured with one thing:</text>
-          <text x="620" y="550" class="t-lbl">the MCP URL. Everything else was discovered.</text>
+          <text x="596" y="534" class="t-lbl">the client was configured with one thing:</text>
+          <text x="596" y="550" class="t-lbl">the MCP URL. Everything else was discovered.</text>
         </svg>
       </div>
       <figcaption><b>Fourteen messages, zero configuration.</b> The 401 names a metadata document; the
@@ -1275,7 +1284,7 @@ OAUTH_CLIENT_ID=mcp-cli EXPECT_ADMIN=ok npm run ex:04:client   <span class="c">#
           <rect x="620" y="150" width="260" height="34" rx="3" class="bx-acc"/>
           <text x="634" y="172" class="t-acc">mcp:tools  mcp:admin → ok</text>
 
-          <text x="20" y="208" class="t-lbl">Keycloak already filters mcp:admin out of alice's token at issuance; the verifier filters it again. Two independent gates, one answer.</text>
+          <text x="20" y="208" class="t-lbl">Keycloak already drops mcp:admin from alice's token at issuance; the verifier drops it again. Two gates, one answer.</text>
         </svg>
       </div>
       <figcaption><b>Two gates, deliberately.</b> The identity provider refuses to <em>issue</em> the admin
@@ -1703,7 +1712,8 @@ npm run ex:05:client -- --auth private-key-jwt  <span class="c"># RFC 7523 — a
           <text x="120" y="234" class="t-lbl" text-anchor="middle">token issued</text>
           <text x="866" y="234" class="t-lbl" text-anchor="end">exp · 15 min</text>
 
-          <line x1="320" y1="42" x2="320" y2="212" class="ln-bad"/>
+          <line x1="320" y1="42" x2="320" y2="179" class="ln-bad"/>
+          <line x1="320" y1="199" x2="320" y2="212" class="ln-bad"/>
           <text x="330" y="36" class="t-bad">an admin revokes alice · t = 4 min</text>
 
           <text x="20" y="76" class="t-hd">04</text>
@@ -1718,9 +1728,9 @@ npm run ex:05:client -- --auth private-key-jwt  <span class="c"># RFC 7523 — a
           <rect x="120" y="138" width="200" height="26" rx="2" class="bx-fill"/>
           <rect x="320" y="138" width="26" height="26" rx="2" class="bx-acc"/>
           <text x="220" y="156" class="t-lbl" text-anchor="middle">accepted</text>
-          <text x="360" y="156" class="t-acc">401 from here on — the gap is your cache TTL (10 s default, 0 = every request)</text>
+          <text x="360" y="156" class="t-acc">401 from here on — the gap is your cache TTL (default 10 s; 0 = always ask)</text>
 
-          <text x="120" y="192" class="t-lbl">the width of that little box is the only thing you are tuning: revocation latency against load on your identity provider</text>
+          <text x="120" y="192" class="t-lbl">the width of that little box is the only knob: revocation latency against load on your identity provider</text>
         </svg>
       </div>
       <figcaption><b>The whole trade, in one picture.</b> Episode 04 cannot see the revocation at all.
@@ -1832,8 +1842,8 @@ npm run ex:07:client                           <span class="c"># → exits 1: th
     <figure>
       <div class="figbox">
         <svg viewBox="0 0 900 214" role="img" aria-label="Timeline showing that mutual TLS authentication completes during the handshake, before the first HTTP byte; a client without a valid certificate never reaches the application at all.">
-          <line x1="470" y1="20" x2="470" y2="150" class="ln-acc"/>
-          <text x="478" y="34" class="t-acc">first HTTP byte</text>
+          <line x1="470" y1="20" x2="470" y2="112" class="ln-acc"/>
+          <text x="478" y="16" class="t-acc">first HTTP byte</text>
 
           <text x="20" y="34" class="t-hd">TLS 1.3 HANDSHAKE</text>
           <rect x="20" y="46" width="430" height="52" rx="3" class="bx"/>
@@ -1843,7 +1853,7 @@ npm run ex:07:client                           <span class="c"># → exits 1: th
           <text x="500" y="34" class="t-hd">HTTP</text>
           <rect x="500" y="46" width="380" height="52" rx="3" class="bx-fill"/>
           <text x="514" y="68" class="t-lbl">POST /mcp — the peer certificate is already verified.</text>
-          <text x="514" y="86" class="t-lbl">CN → clientId · OU mcp-admin → mcp:admin · notAfter → expiresAt</text>
+          <text x="514" y="86" class="t-lbl">CN→clientId · OU mcp-admin→mcp:admin · notAfter→exp</text>
 
           <path d="M 20 128 L 300 128" class="ln-bad" marker-end="url(#ah)"/>
           <text x="34" y="120" class="t-bad">no certificate · expired · unknown CA</text>
@@ -1962,10 +1972,10 @@ MTLS_ALLOWED_CN=bob npm run ex:08:server        <span class="c"># then alice →
 
     <figure>
       <div class="figbox">
-        <svg viewBox="0 0 940 268" role="img" aria-label="A gateway validates the Keycloak token, strips inbound identity headers and signs a thirty-second assertion for the internal MCP server; a direct request to the internal port carrying a forged identity header is rejected.">
+        <svg viewBox="0 0 940 284" role="img" aria-label="A gateway validates the Keycloak token, strips inbound identity headers and signs a thirty-second assertion for the internal MCP server; a direct request to the internal port carrying a forged identity header is rejected.">
           <rect x="18" y="56" width="140" height="56" rx="3" class="bx-fill"/>
           <text x="88" y="80" class="t" text-anchor="middle">MCP client</text>
-          <text x="88" y="97" class="t-lbl" text-anchor="middle">04's client, unchanged</text>
+          <text x="88" y="97" class="t-lbl" text-anchor="middle">04's client, as is</text>
 
           <line x1="158" y1="84" x2="300" y2="84" class="ln-acc" marker-end="url(#ah-a)"/>
           <text x="229" y="74" class="t-acc" text-anchor="middle">Bearer (Keycloak)</text>
@@ -1988,12 +1998,15 @@ MTLS_ALLOWED_CN=bob npm run ex:08:server        <span class="c"># then alice →
           <text x="814" y="108" class="t-lbl" text-anchor="middle">aud mcp-internal, replay cache</text>
           <text x="814" y="126" class="t-lbl" text-anchor="middle">runs the tools</text>
 
-          <line x1="632" y1="20" x2="632" y2="150" class="ln-dim"/>
+          <line x1="632" y1="20" x2="632" y2="54" class="ln-dim"/>
+          <line x1="632" y1="72" x2="632" y2="90" class="ln-dim"/>
+          <line x1="632" y1="108" x2="632" y2="150" class="ln-dim"/>
           <text x="642" y="16" class="t-lbl">trust boundary</text>
 
           <path d="M 88 156 L 88 206 L 812 206 L 812 138" class="ln-bad" marker-end="url(#ah)"/>
           <text x="450" y="226" class="t-bad" text-anchor="middle">direct to :4119 with a forged X-Forwarded-User: bob and no assertion → 401, and no metadata to help</text>
-          <text x="450" y="248" class="t-lbl" text-anchor="middle">the model only holds while the backend is unreachable except through the gateway — the example ships the broken variant too, so you can watch it fail</text>
+          <text x="450" y="248" class="t-lbl" text-anchor="middle">the model only holds while the backend is unreachable except through the gateway —</text>
+          <text x="450" y="264" class="t-lbl" text-anchor="middle">the example ships the broken variant too, so you can watch it fail</text>
         </svg>
       </div>
       <figcaption><b>Why an assertion and not the token.</b> Forwarding a header like
@@ -2114,7 +2127,8 @@ npm run ex:09:gateway     <span class="c"># gateway :4109</span></pre>
           <text x="394" y="98" class="t-lbl" text-anchor="middle">tool: downstream_profile</text>
 
           <path d="M 394 120 L 394 168 L 560 168" class="ln" marker-end="url(#ah)"/>
-          <text x="404" y="146" class="t-lbl">RFC 8693 exchange — presents token A, authenticates as itself</text>
+          <text x="404" y="160" class="t-lbl">RFC 8693 exchange</text>
+          <text x="404" y="214" class="t-lbl">presents token A, authenticates as itself</text>
 
           <rect x="566" y="140" width="200" height="56" rx="3" class="bx"/>
           <text x="666" y="164" class="t" text-anchor="middle">Keycloak</text>
@@ -2124,18 +2138,18 @@ npm run ex:09:gateway     <span class="c"># gateway :4109</span></pre>
           <text x="510" y="92" class="t-acc">token B</text>
 
           <line x1="494" y1="72" x2="770" y2="72" class="ln-acc" marker-end="url(#ah-a)"/>
-          <text x="632" y="46" class="t-acc" text-anchor="middle">token B · sub alice · azp mcp-server · aud downstream-api</text>
-          <text x="632" y="62" class="t-lbl" text-anchor="middle">the user is still the subject; the server is only the delegate</text>
+          <text x="632" y="46" class="t-acc" text-anchor="middle">token B · sub alice · azp mcp-server</text>
+          <text x="632" y="60" class="t-lbl" text-anchor="middle">aud downstream-api — still her identity</text>
 
           <rect x="776" y="46" width="170" height="56" rx="3" class="bx"/>
           <text x="861" y="70" class="t" text-anchor="middle">downstream API</text>
-          <text x="861" y="88" class="t-lbl" text-anchor="middle">:4190 · applies its own rules</text>
+          <text x="861" y="88" class="t-lbl" text-anchor="middle">:4190 · its own rules</text>
 
           <path d="M 394 120 L 394 240 L 861 240 L 861 102" class="ln-bad"/>
           <line x1="616" y1="230" x2="636" y2="250" class="ln-bad"/>
           <line x1="636" y1="230" x2="616" y2="250" class="ln-bad"/>
-          <text x="480" y="262" class="t-bad">the anti-pattern: forwarding token A → 401, wrong audience. The spec forbids it; this is the confused deputy.</text>
-          <text x="480" y="284" class="t-lbl">and the reverse also fails: token B presented at /mcp is refused. Neither token works at the other hop.</text>
+          <text x="20" y="262" class="t-bad">the anti-pattern: forwarding token A → 401, wrong audience. The spec forbids it; this is the confused deputy.</text>
+          <text x="20" y="284" class="t-lbl">and the reverse also fails: token B presented at /mcp is refused. Neither token works at the other hop.</text>
         </svg>
       </div>
       <figcaption><b>Delegation, not impersonation.</b> The exchanged token keeps alice as the subject and
@@ -2521,8 +2535,10 @@ npm run smoke       <span class="c"># end-to-end: real ports, real headless brow
   /* Audio. When the page is served by scripts/serve-course.ts the rendered narration sits
      next to it, so attach a player per episode. The page's script blocks and the track list
      both follow the course's own order, so an indexed zip is enough and there is no slug
-     map to keep in step. Anywhere else — the published artifact, a file:// open — the fetch
-     fails and the page simply renders without players. */
+     map to keep in step. An episode that has also been rendered as video (`npm run video`)
+     carries `video` and `poster`, and gets a Watch button that unfolds a <video> below the
+     row. Anywhere else — the published artifact, a file:// open — the fetch fails and the
+     page simply renders without players. */
   var scripts = Array.prototype.slice.call(document.querySelectorAll('.script'));
   fetch('tracks.json', { cache: 'no-store' })
     .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('no audio')); })
@@ -2541,6 +2557,33 @@ npm run smoke       <span class="c"># end-to-end: real ports, real headless brow
         audio.src = track.url;
         wrap.appendChild(label);
         wrap.appendChild(audio);
+        if (track.video) {
+          /* The <video> is created on the first click, so a page with fourteen of them
+             fetches nothing until someone asks. Hiding it pauses it. */
+          var watch = document.createElement('button');
+          watch.type = 'button';
+          watch.className = 'player-watch';
+          watch.textContent = 'WATCH';
+          watch.setAttribute('aria-expanded', 'false');
+          var video = null;
+          watch.addEventListener('click', function () {
+            if (!video) {
+              video = document.createElement('video');
+              video.className = 'player-video';
+              video.controls = true;
+              video.preload = 'metadata';
+              if (track.poster) video.poster = track.poster;
+              video.src = track.video;
+              block.insertBefore(video, wrap.nextSibling);
+            } else {
+              video.hidden = !video.hidden;
+              if (video.hidden) video.pause();
+            }
+            watch.textContent = video.hidden ? 'WATCH' : 'HIDE';
+            watch.setAttribute('aria-expanded', video.hidden ? 'false' : 'true');
+          });
+          wrap.appendChild(watch);
+        }
         block.insertBefore(wrap, block.firstElementChild.nextSibling);
       });
     })

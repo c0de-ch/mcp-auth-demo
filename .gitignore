@@ -27,3 +27,5 @@ keycloak/.generated/
 # rendered speech. 61 minutes of WAV is ~155 MB — publish it, do not commit it.
 /.audio/
 /audio/
+/video/
+/.video/
