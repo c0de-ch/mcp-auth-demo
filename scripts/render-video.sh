@@ -9,15 +9,17 @@
 #   1. scripts/render-audio.sh      the narration, audio/<slug>.wav, and audio/timeline.json: where every
 #                                   paragraph starts and how long it lasts (see scripts/render-course.py)
 #   2. scripts/render-slides.py     the title card and one 1920×1080 PNG per paragraph → video/slides/<slug>/
-#   3. ffmpeg, below                the title card for lead_in seconds of silence, then each slide for
-#                                   exactly the seconds its paragraph occupies, muxed with the narration
+#   3. scripts/render-avatar.py     the presenter — a face that speaks with the narration — as raw frames
+#   4. ffmpeg, below                the title card for lead_in seconds of silence, then each slide for
+#                                   exactly the seconds its paragraph occupies, the presenter overlaid,
+#                                   muxed with the narration
 #
 # The cut is exact by construction: the timeline is written from the very samples the episode WAV is
 # assembled from, so slide k appears on the 24 fps frame nearest to where paragraph k starts. Slides
 # are stills, so the video costs few bytes (x264 -tune stillimage): a few MB per episode.
 # Everything under video/ is git-ignored, like the audio: publish it, do not commit it.
 #
-# Requires: what render-audio.sh needs (uv), python3 with playwright for the slides, ffmpeg with libx264.
+# Requires: what render-audio.sh needs (uv), python3 with playwright (slides) and Pillow (presenter), ffmpeg with libx264.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -60,6 +62,12 @@ mkdir -p "$OUT"
 LISTS="$(mktemp -d)"
 trap 'rm -rf "$LISTS"' EXIT
 
+# The presenter's geometry: an 88 px face centred in the 112 px header strip, inset 96 px like the
+# text; the 240 px resting face on the title card sits in the hero's bottom-right gutter.
+AVATAR=88;  AVATAR_X=$((1920 - 96 - AVATAR)); AVATAR_Y=$(((112 - AVATAR) / 2))
+STILL=240;  STILL_X=$((1920 - 96 - STILL));   STILL_Y=$((1080 - 96 - STILL))
+python3 "$ROOT/scripts/render-avatar.py" --still "$LISTS/avatar-still.png" --size "$STILL"
+
 # The plan: one line per episode — slug, cut|skip, lead-in in ms, total seconds, wav, title card —
 # plus, for each episode to cut, the concat list ffmpeg assembles it from. Python's json rather than
 # jq, so that the only tool this script adds to the audio pipeline is ffmpeg.
@@ -98,7 +106,8 @@ for e in episodes:
     part = mp4 + ".part"
     if os.path.exists(part):
         os.remove(part)  # a previous run died mid-encode; nothing trusts it
-    newest = max(os.path.getmtime(path) for path in [wav] + [path for path, _ in shots])
+    avatar = os.path.join(root, "scripts", "render-avatar.py")
+    newest = max(os.path.getmtime(path) for path in [wav, avatar] + [path for path, _ in shots])
     fresh = os.path.exists(mp4) and os.path.getmtime(mp4) > newest
     action = "skip" if fresh and os.path.exists(poster) else "poster" if fresh else "cut"
     if action == "cut":
@@ -116,7 +125,7 @@ while IFS=$'\t' read -r slug action lead_in_ms total wav title; do
     continue
   fi
   if [ "$action" = poster ]; then
-    ffmpeg -nostdin -loglevel error -y -i "$title" -q:v 3 "$OUT/$slug.jpg"
+    ffmpeg -nostdin -loglevel error -y -i "$title" -i "$LISTS/avatar-still.png" -filter_complex "overlay=x=$STILL_X:y=$STILL_Y" -q:v 3 "$OUT/$slug.jpg"
     echo "    $slug.jpg — poster regenerated"
     continue
   fi
@@ -126,14 +135,22 @@ while IFS=$'\t' read -r slug action lead_in_ms total wav title; do
   # The end is cut by -t, not -shortest: how long the concat demuxer holds its last still is not
   # defined (measured 2.5–4.7 s, varying run to run), so tpad holds it for ever and -t ends both
   # streams at lead-in + narration — the exact instant, not "when the shorter stream happens to end".
-  ffmpeg -nostdin -loglevel error -y \
+  # The presenter (scripts/render-avatar.py) is piped in as raw RGBA frames and overlaid at the
+  # right end of the header strip; during the title card the large resting face sits bottom-right
+  # instead. The audio delay and both overlays live in one filter graph.
+  lead_in_s=$(awk -v ms="$lead_in_ms" 'BEGIN{printf "%.3f", ms/1000}')
+  python3 "$ROOT/scripts/render-avatar.py" "$wav" --lead-in "$lead_in_s" --size "$AVATAR" --fps 24 \
+  | ffmpeg -nostdin -loglevel error -y \
       -f concat -safe 0 -i "$LISTS/$slug.txt" -i "$wav" \
-      -vf "fps=24,tpad=stop=-1:stop_mode=clone" -af "adelay=${lead_in_ms}:all=1" \
+      -f rawvideo -pix_fmt rgba -s "${AVATAR}x${AVATAR}" -r 24 -i pipe:0 \
+      -loop 1 -i "$LISTS/avatar-still.png" \
+      -filter_complex "[0:v]fps=24,tpad=stop=-1:stop_mode=clone[base];[base][3:v]overlay=x=$STILL_X:y=$STILL_Y:enable='lt(t,$lead_in_s)'[t];[t][2:v]overlay=x=$AVATAR_X:y=$AVATAR_Y:enable='gte(t,$lead_in_s)'[v];[1:a]adelay=${lead_in_ms}:all=1[a]" \
+      -map "[v]" -map "[a]" \
       -c:v libx264 -preset medium -crf 23 -tune stillimage -pix_fmt yuv420p \
       -c:a aac -b:a 96k -movflags +faststart -t "$total" \
       -f mp4 "$OUT/$slug.mp4.part"
   mv "$OUT/$slug.mp4.part" "$OUT/$slug.mp4"
-  ffmpeg -nostdin -loglevel error -y -i "$title" -q:v 3 "$OUT/$slug.jpg"
+  ffmpeg -nostdin -loglevel error -y -i "$title" -i "$LISTS/avatar-still.png" -filter_complex "overlay=x=$STILL_X:y=$STILL_Y" -q:v 3 "$OUT/$slug.jpg"
   echo "    $slug.mp4"
 done <"$LISTS/plan.tsv"
 
